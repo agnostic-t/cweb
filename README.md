@@ -3,6 +3,7 @@
 [![C](https://img.shields.io/badge/language-C-A8B9CC.svg)](https://www.iso.org/standard/82075.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.0.1-orange.svg)
+![Dependencies](https://img.shields.io/badge/dependencies-0-green.svg)
 
 # CWEB
 
