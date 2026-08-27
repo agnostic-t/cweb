@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -e
+
+CC=gcc
+CFLAGS="-O0 -g -fsanitize=address"
+
+LINK=ar
+
+echo "[cweb][building] lib"
+
+cd ./cweb
+mkdir -p ./build/
+rm -rf ./build/*
+
+$CC $CFLAGS -c *.c -I..
+$LINK rcs ./build/libcweb.a *.o
+rm -rf *.o
+cd ..
+
+echo "[cweb][building] examples"
+mkdir -p ./build/demo
+$CC $CFLAGS -o ./build/demo/c4web ./main.c "./cweb/build/libcweb.a"
+$CC $CFLAGS -o ./build/demo/c4article ./article.c "./cweb/build/libcweb.a"
+
+echo "[cweb] done"
