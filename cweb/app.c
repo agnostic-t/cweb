@@ -7,6 +7,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <signal.h>
+#include <time.h>
+#include <unistd.h>
 
 /* ------------------------------------------------------------------ *
  *  Signal handling                                                    *
@@ -64,6 +66,7 @@ int cweb_app_create(cweb_app *app, const char *host, int port) {
     }
     app->port = port > 0 ? port : 8080;
     app->running = 0;
+    app->max_sessions = 64;   /* LRU cap — see cweb_app_set_max_sessions */
 
     /* Default metadata */
     app->meta.lang = strdup("en");
@@ -73,6 +76,13 @@ int cweb_app_create(cweb_app *app, const char *host, int port) {
 
 void cweb_app_destroy(cweb_app *app) {
     if (!app) return;
+    /* Tear down every live session first (runs user state_free hooks). */
+    cweb_app_sessions_free(app);
+    free(app->sessions);
+    app->sessions = NULL;
+    app->sessions_count = 0;
+    app->sessions_cap = 0;
+    app->cur_sess = NULL;
     if (app->root) {
         cweb_widget_free(app->root);
         app->root = NULL;
@@ -123,6 +133,163 @@ int cweb_app_set_root(cweb_app *app, cweb_widget *root) {
     if (!app->root) return -1;
     cweb_widget_free_contents(root);
     return 0;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Per-session state + sessions                                        *
+ * ------------------------------------------------------------------ */
+void cweb_app_set_state_callbacks(cweb_app *app,
+                                  cweb_state_new_fn state_new,
+                                  cweb_state_free_fn state_free) {
+    if (!app) return;
+    app->state_new  = state_new;
+    app->state_free = state_free;
+}
+
+void cweb_app_set_max_sessions(cweb_app *app, size_t max_n) {
+    if (!app) return;
+    app->max_sessions = max_n > 0 ? max_n : 1;
+}
+
+size_t cweb_app_session_count(cweb_app *app) {
+    return app ? app->sessions_count : 0;
+}
+
+/* 128-bit session id: 16 bytes from /dev/urandom, hex-encoded.
+   Fallback (no /dev/urandom): a SplitMix64 stream seeded from the
+   clock + pid — fine for a demo framework, never used on Linux.       */
+static void gen_sid(char out[33]) {
+    unsigned char raw[16];
+    FILE *f = fopen("/dev/urandom", "rb");
+    if (f) {
+        size_t n = fread(raw, 1, sizeof(raw), f);
+        fclose(f);
+        if (n != sizeof(raw)) f = NULL;
+    }
+    if (!f) {
+        unsigned long long x = (unsigned long long)time(NULL) ^ 0x9E3779B97F4A7C15ull;
+        x ^= (unsigned long long)getpid() << 32;
+        for (int i = 0; i < 16; i++) {
+            x += 0x9E3779B97F4A7C15ull;
+            unsigned long long z = x;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+            z ^= z >> 31;
+            raw[i] = (unsigned char)(z >> 24);
+        }
+    }
+    static const char hex[] = "0123456789abcdef";
+    for (int i = 0; i < 16; i++) {
+        out[i * 2]     = hex[raw[i] >> 4];
+        out[i * 2 + 1] = hex[raw[i] & 0xF];
+    }
+    out[32] = '\0';
+}
+
+/* Free everything the session owns (tree, registry, page key, state). */
+static void session_dispose(cweb_app *app, cweb_session *sess) {
+    if (!sess) return;
+    if (sess->root) {
+        cweb_widget_free(sess->root);
+        sess->root = NULL;
+    }
+    free(sess->registry);
+    sess->registry = NULL;
+    sess->registry_count = 0;
+    sess->registry_cap = 0;
+    sess->next_id = 0;
+    free(sess->page_key);
+    sess->page_key = NULL;
+    if (app && app->state_free) {
+        app->state_free(sess->state);
+    }
+    sess->state = NULL;
+}
+
+void cweb_app_session_destroy(cweb_app *app, cweb_session *sess) {
+    if (!app || !sess) return;
+    for (size_t i = 0; i < app->sessions_count; i++) {
+        if (app->sessions[i] == sess) {
+            memmove(&app->sessions[i], &app->sessions[i + 1],
+                    (app->sessions_count - i - 1) * sizeof(cweb_session *));
+            app->sessions_count--;
+            break;
+        }
+    }
+    session_dispose(app, sess);
+    free(sess);
+}
+
+void cweb_app_sessions_free(cweb_app *app) {
+    if (!app) return;
+    for (size_t i = 0; i < app->sessions_count; i++) {
+        session_dispose(app, app->sessions[i]);
+        free(app->sessions[i]);
+    }
+    app->sessions_count = 0;   /* array itself freed by cweb_app_destroy */
+}
+
+/* LRU victim: the live session with the smallest last_used counter. */
+static cweb_session *lru_victim(cweb_app *app) {
+    cweb_session *victim = NULL;
+    for (size_t i = 0; i < app->sessions_count; i++) {
+        cweb_session *s = app->sessions[i];
+        if (!victim || s->last_used < victim->last_used) victim = s;
+    }
+    return victim;
+}
+
+cweb_session *cweb_app_session_get(cweb_app *app, const char *sid,
+                                   int *is_new) {
+    if (is_new) *is_new = 0;
+    if (!app) return NULL;
+
+    /* Look up an existing session by sid. */
+    if (sid && *sid) {
+        for (size_t i = 0; i < app->sessions_count; i++) {
+            if (strcmp(app->sessions[i]->sid, sid) == 0) {
+                return app->sessions[i];
+            }
+        }
+    }
+
+    /* Create a new session — but respect the LRU cap first. */
+    if (app->sessions_count >= app->max_sessions) {
+        cweb_session *victim = lru_victim(app);
+        if (victim) cweb_app_session_destroy(app, victim);
+    }
+
+    if (app->sessions_count == app->sessions_cap) {
+        size_t nc = app->sessions_cap ? app->sessions_cap * 2 : 8;
+        cweb_session **ns = realloc(app->sessions, nc * sizeof(cweb_session *));
+        if (!ns) {
+            fprintf(stderr, "[cweb] out of memory creating session\n");
+            abort();
+        }
+        app->sessions = ns;
+        app->sessions_cap = nc;
+    }
+
+    cweb_session *sess = calloc(1, sizeof(cweb_session));
+    if (!sess) {
+        fprintf(stderr, "[cweb] out of memory creating session\n");
+        abort();
+    }
+    gen_sid(sess->sid);
+    /* Legacy single-page mode: every visitor starts from a PRIVATE clone
+       of the prototype tree, so one user's callback mutations (bg color,
+       counters, input text) are invisible to everyone else. Route mode
+       leaves root NULL — the route builder fills it on the first GET.   */
+    if (app->routes_count == 0 && app->root) {
+        sess->root = cweb_widget_clone(app->root);
+    }
+    if (app->state_new) {
+        sess->state = app->state_new();
+    }
+    sess->last_used = ++app->req_counter;
+    app->sessions[app->sessions_count++] = sess;
+    if (is_new) *is_new = 1;
+    return sess;
 }
 
 int cweb_app_add_route(cweb_app *app, const char *pattern,

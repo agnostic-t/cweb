@@ -274,6 +274,10 @@ static void render_box(cweb_widget *w, strbuf *out) {
         sb_appendf(out, "border-radius: %dpx; ", w->border_radius);
     }
 
+    /* overflow: hidden — clips overflowing children (big images, wide
+       content) to this box's bounds, INCLUDING its rounded corners.      */
+    if (w->clip) sb_append(out, "overflow: hidden; ");
+
     /* Close the style attribute */
     sb_append(out, "\"");
 
@@ -332,38 +336,50 @@ static void render_box(cweb_widget *w, strbuf *out) {
 }
 
 static void render_text(cweb_widget *w, strbuf *out) {
-    /* Open styling tags: <b> <i> <u> <s> <code> as needed (in order). */
-    if (w->style & CWEB_TEXT_BOLD)   sb_append(out, "<b>");
-    if (w->style & CWEB_TEXT_ITALIC) sb_append(out, "<i>");
-    if (w->style & CWEB_TEXT_UNDER)  sb_append(out, "<u>");
-    if (w->style & CWEB_TEXT_STRIKE) sb_append(out, "<s>");
-    if (w->style & CWEB_TEXT_MONO)   sb_append(out, "<code>");
-
-    /* Open the main text element.
-       - Wrap mode: <div> with word-break so long lines wrap inside the parent.
-       - Non-wrap mode: <span> with white-space: nowrap (single-line, clipped). */
-    const char *tag = w->wrap ? "div" : "span";
-    sb_appendf(out, "<%s id=\"w%d\" style=\"", tag, w->id);
+    /* The main text element is ALWAYS a block <div>: text-overflow /
+       white-space only bite on a block that clips itself, and as a flex
+       child a div is already the flex item (an inline span inside <b>
+       would dodge the clipping). Inline style tags therefore live INSIDE
+       the div, not around it.
+       - default: one line, clipped with a trailing "…"
+         (white-space: nowrap + overflow: hidden + text-overflow: ellipsis;
+         overflow: hidden also zeroes the flex automatic min-size, so the
+         label shrinks with its button/box instead of pushing it wide).
+       - wrap=1:  pre-wrap — keeps manual \n breaks and wraps long lines. */
+    sb_appendf(out, "<div id=\"w%d\" style=\"", w->id);
     sb_append_color(out, "color", w->r, w->g, w->b);
     if (w->font_size > 0) sb_appendf(out, "font-size: %dpx; ", w->font_size);
     if (w->font_family) sb_appendf(out, "font-family: %s; ", w->font_family);
     if (w->wrap) {
         sb_append(out, "word-break: break-word; overflow-wrap: break-word; white-space: pre-wrap; ");
     } else {
-        sb_append(out, "white-space: nowrap; ");
+        /* max-width:100% is essential: in a COLUMN flex the width is the
+           cross axis and its floor is min-content (= the whole nowrap
+           line) — overflow:hidden alone cannot cap it there. Capping the
+           div at the parent's content box makes the ellipsis actually
+           fire inside buttons/boxes of any flex direction.             */
+        sb_append(out, "white-space: nowrap; overflow: hidden; "
+                       "max-width: 100%; text-overflow: ellipsis; ");
     }
     sb_append(out, "\">");
+
+    /* Inline styling tags: <b> <i> <u> <s> <code> as needed (in order). */
+    if (w->style & CWEB_TEXT_BOLD)   sb_append(out, "<b>");
+    if (w->style & CWEB_TEXT_ITALIC) sb_append(out, "<i>");
+    if (w->style & CWEB_TEXT_UNDER)  sb_append(out, "<u>");
+    if (w->style & CWEB_TEXT_STRIKE) sb_append(out, "<s>");
+    if (w->style & CWEB_TEXT_MONO)   sb_append(out, "<code>");
 
     /* The actual text content (HTML-escaped). */
     sb_append_escaped(out, w->content ? w->content : "");
 
-    /* Close in reverse order: tag first, then </code></s></u></i></b>. */
-    sb_appendf(out, "</%s>", tag);
+    /* Close inline style tags in reverse order, then the block itself. */
     if (w->style & CWEB_TEXT_MONO)   sb_append(out, "</code>");
     if (w->style & CWEB_TEXT_STRIKE) sb_append(out, "</s>");
     if (w->style & CWEB_TEXT_UNDER)  sb_append(out, "</u>");
     if (w->style & CWEB_TEXT_ITALIC) sb_append(out, "</i>");
     if (w->style & CWEB_TEXT_BOLD)   sb_append(out, "</b>");
+    sb_append(out, "</div>");
 }
 
 static void render_image(cweb_widget *w, strbuf *out) {
@@ -383,6 +399,10 @@ static void render_image(cweb_widget *w, strbuf *out) {
         case 2: sb_append(out, "object-fit: cover; ");   break;
         default: break;
     }
+    /* Round the image's own corners (e.g. avatars/thumbnails). To clip
+       the image against the PARENT's rounded box instead, set the parent
+       clip: cweb_widget_set_clip(parent, 1).                             */
+    if (w->border_radius > 0) sb_appendf(out, "border-radius: %dpx; ", w->border_radius);
     sb_append(out, "max-width: 100%; height: auto;\" />");
 }
 
@@ -394,7 +414,12 @@ static void render_container(cweb_widget *w, strbuf *out) {
     if (w->gap > 0)     sb_appendf(out, "gap: %dpx; ", w->gap);
     if (w->padding > 0) sb_appendf(out, "padding: %dpx; ", w->padding);
     sb_append_color(out, "background-color", w->bg_r, w->bg_g, w->bg_b);
-    if (w->scrollable) sb_append(out, "overflow: auto; ");
+    if (w->scrollable) {
+        sb_append(out, "overflow: auto; ");
+    } else if (w->clip) {
+        /* scrollable wins — a scroll area already constrains its children. */
+        sb_append(out, "overflow: hidden; ");
+    }
 
     /* Close the style attribute */
     sb_append(out, "\"");
@@ -518,8 +543,13 @@ char *cweb_html_render_widget(cweb_widget *w, size_t *out_len) {
 char *cweb_html_render(cweb_app *app, size_t *out_len) {
     if (!app) return NULL;
 
-    /* Ensure every widget has an id */
-    cweb_app_register_tree(app, app->root);
+    /* Render the ACTIVE tree: during request handling that is the
+       current visitor's session tree; outside requests (--html mode,
+       tests) it is the app's own root.                                     */
+    cweb_widget *tree = app->cur_sess ? app->cur_sess->root : app->root;
+
+    /* Ensure every widget has an id (ids go into the active registry) */
+    cweb_app_register_tree(app, tree);
 
     strbuf out;
     sb_init(&out);
@@ -577,11 +607,11 @@ char *cweb_html_render(cweb_app *app, size_t *out_len) {
         "  </style>\n");
 
     /* Set body bg from root widget so overscroll area matches. */
-    if (app->root &&
-        (app->root->bg_r >= 0 || app->root->bg_g >= 0 || app->root->bg_b >= 0)) {
-        int r = app->root->bg_r >= 0 ? app->root->bg_r : 26;
-        int g = app->root->bg_g >= 0 ? app->root->bg_g : 26;
-        int b = app->root->bg_b >= 0 ? app->root->bg_b : 46;
+    if (tree &&
+        (tree->bg_r >= 0 || tree->bg_g >= 0 || tree->bg_b >= 0)) {
+        int r = tree->bg_r >= 0 ? tree->bg_r : 26;
+        int g = tree->bg_g >= 0 ? tree->bg_g : 26;
+        int b = tree->bg_b >= 0 ? tree->bg_b : 46;
         sb_appendf(&out,
             "  <style>\n"
             "    html, body { background-color: rgb(%d,%d,%d); }\n"
@@ -601,9 +631,9 @@ char *cweb_html_render(cweb_app *app, size_t *out_len) {
 
     /* Emit @media queries for any widget with responsive overrides.
        Wrap in <style> so the browser parses them as CSS, not text. */
-    if (app->root) {
+    if (tree) {
         sb_append(&out, "  <style id=\"cweb-responsive\">\n");
-        render_media_queries(app->root, &out);
+        render_media_queries(tree, &out);
         sb_append(&out, "  </style>\n");
     }
 
@@ -612,8 +642,8 @@ char *cweb_html_render(cweb_app *app, size_t *out_len) {
     sb_append(&out, "\">\n  <div id=\"cweb-root\">\n");
 
     /* Render the widget tree */
-    if (app->root) {
-        render_widget(app->root, &out);
+    if (tree) {
+        render_widget(tree, &out);
     }
 
     sb_append(&out, "\n  </div>\n");

@@ -59,20 +59,80 @@ typedef struct {
 } cweb_redirect_rule;
 
 /* ------------------------------------------------------------------ *
+ *  Sessions — one isolated widget tree + user state per visitor       *
+ *                                                                    *
+ *  The first time a browser hits the server it gets a `cweb_sid`      *
+ *  cookie. The cookie maps to a cweb_session holding:                *
+ *    - its OWN clone of the widget tree (legacy set_root mode) or    *
+ *      its own builder-produced tree (route mode), and               *
+ *    - a `state` pointer produced by the app's state_new callback.   *
+ *  Callbacks receive that state, so two users clicking the same      *
+ *  button mutate two different trees: user A never sees user B's     *
+ *  changes.                                                          *
+ *                                                                    *
+ *  Sessions are capped (LRU eviction by last use, default 64) so     *
+ *  cookie-less clients (curl, bots) cannot grow memory forever.      *
+ *  Everything here is single-threaded by design (one accept loop).   *
+ * ------------------------------------------------------------------ */
+typedef struct cweb_session cweb_session;
+
+struct cweb_session {
+    char          sid[33];        /* 32 hex chars + NUL, from cookie    */
+    cweb_widget  *root;           /* THIS visitor's live widget tree    */
+    void         *state;          /* from state_new, freed by state_free*/
+    char         *page_key;       /* route mode: path that built root   */
+
+    /* Per-session widget id registry (same role as the app-level one) */
+    cweb_widget **registry;
+    size_t        registry_count;
+    size_t        registry_cap;
+    int           next_id;
+
+    unsigned long long last_used;  /* monotonic counter, for LRU eviction */
+};
+
+/* State lifecycle hooks. state_new() allocates one user state block per
+   session (return NULL to run with state == NULL); state_free() releases
+   it when the session is evicted or the app is destroyed. Example:
+
+     typedef struct { int clicks; } counter;
+     static void *counter_new(void) { return calloc(1, sizeof(counter)); }
+     static void  counter_free(void *s) { free(s); }
+     cweb_app_set_state_callbacks(&app, counter_new, counter_free);     */
+typedef void *(*cweb_state_new_fn)(void);
+typedef void  (*cweb_state_free_fn)(void *state);
+
+/* ------------------------------------------------------------------ *
  *  App                                                                *
  * ------------------------------------------------------------------ */
 typedef struct cweb_app {
     char           host[64];       /* "127.0.0.1" by default */
     int            port;           /* 8080 by default        */
-    cweb_widget   *root;           /* root container (built per-request) */
+    cweb_widget   *root;           /* PROTOTYPE tree: legacy-mode pages   */
     cweb_metadata  meta;
     int            running;        /* set to 0 to stop      */
 
-    /* Internal: registry of all live widgets (for id lookup). */
+    /* Internal: registry of the CURRENT tree being rendered. Used only
+       when no session is active (--html mode, custom 404 rendering);
+       per-visitor trees register ids into their cweb_session instead. */
     cweb_widget  **registry;
     size_t         registry_count;
     size_t         registry_cap;
     int            next_id;
+
+    /* Per-visitor sessions (see struct cweb_session above). cur_sess
+       points at the session whose tree is being rendered/dispatched
+       right now; NULL outside request handling. Internal.            */
+    cweb_session **sessions;
+    size_t         sessions_count;
+    size_t         sessions_cap;
+    size_t         max_sessions;      /* LRU cap, default 64            */
+    unsigned long long req_counter;   /* monotonic, feeds last_used     */
+    cweb_session  *cur_sess;
+
+    /* Per-session state factory/destructor (NULL = state stays NULL). */
+    cweb_state_new_fn  state_new;
+    cweb_state_free_fn state_free;
 
     /* Internal: render cache. */
     char          *html_cache;
@@ -151,6 +211,33 @@ int  cweb_app_run(cweb_app *app);
 
 /* Signal the event loop to stop. Safe to call from any thread. */
 void cweb_app_stop(cweb_app *app);
+
+/* Per-session state factory (see cweb_state_new_fn). Call BEFORE
+   cweb_app_run; every session created afterwards gets state_new()'d
+   state, and its callback signature is:
+       int on_click(cweb_widget *w, cweb_event *ev, void *state);      */
+void cweb_app_set_state_callbacks(cweb_app *app,
+                                  cweb_state_new_fn state_new,
+                                  cweb_state_free_fn state_free);
+
+/* Sessions ----------------------------------------------------------- */
+/* Get (or lazily create) the session for `sid`. sid == NULL or an
+   unknown id creates a fresh session (new random sid, tree seeded from
+   the prototype root in legacy mode, state via state_new). *is_new is
+   set to 1 when the session was just created. Never returns NULL
+   (fatal exit on OOM). Used internally by http.c.                     */
+cweb_session *cweb_app_session_get(cweb_app *app, const char *sid,
+                                   int *is_new);
+/* Destroy one session: runs state_free, frees the tree, removes it
+   from the app's list.                                                */
+void          cweb_app_session_destroy(cweb_app *app, cweb_session *sess);
+/* Free ALL sessions (called by cweb_app_destroy).                     */
+void          cweb_app_sessions_free(cweb_app *app);
+/* Current number of live sessions.                                    */
+size_t        cweb_app_session_count(cweb_app *app);
+/* LRU cap on live sessions (default 64). When exceeded, the least
+   recently used session is destroyed before a new one is created.     */
+void          cweb_app_set_max_sessions(cweb_app *app, size_t max_n);
 
 /* Force a re-render of the HTML cache. Called automatically when a
    request mutates the tree (e.g. a click callback changes a color). */

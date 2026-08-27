@@ -40,13 +40,17 @@ int  cweb_box_add_text(cweb_widget *b, cweb_widget *t);
 int  cweb_box_take_text(cweb_widget *b, cweb_widget *t);
 
 /* Make this box clickable. The callback is invoked when the browser
-   sends a POST /api/click?id=N request.                                */
+   sends a POST /api/click?id=N request. It receives THIS visitor's
+   private `state` block (see cweb_app_set_state_callbacks in app.h),
+   and `b` is the session's own copy of the widget — mutations stay
+   private to that user.                                                 */
 void cweb_box_set_on_click(cweb_widget *b, cweb_callback cb);
 
 /* Make this box an input field. Renders as <textarea> if multiline=1,
    else <input type="text">. The callback can be NULL — the input will
    still be rendered and its value stored in the buffer (retrievable
-   via cweb_input_get_value).                                          */
+   via cweb_input_get_value). The callback also receives the visitor's
+   per-session `state`.                                                  */
 void cweb_box_set_input    (cweb_widget *b, cweb_callback cb);
 void cweb_box_set_multiline(cweb_widget *b, int enable);
 void cweb_box_set_placeholder(cweb_widget *b, const char *text);

@@ -34,3 +34,8 @@ void cweb_image_set_fit(cweb_widget *img, cweb_image_fit fit) {
     if (!img) return;
     img->img_fit = (int)fit;
 }
+
+void cweb_image_set_radius(cweb_widget *img, int radius_px) {
+    if (!img) return;
+    img->border_radius = radius_px > 0 ? radius_px : 0;
+}

@@ -119,8 +119,16 @@ typedef struct {
 #define CWEB_BP_DIRECTION  (1<<5)
 
 /* ------------------------------------------------------------------ *
- *  Callbacks (forward decl)                                          *
- *  - For MVP they are stored but not yet wired to HTTP routes.        *
+ *  Callbacks                                                          *
+ *  Wired by http.c: POST /api/click?id=N invokes on_click and         *
+ *  POST /api/input?id=N invokes on_input on the SESSION's copy of     *
+ *  the tree, then the page is re-rendered and returned.               *
+ *                                                                    *
+ *  The `state` argument is that visitor's private state block         *
+ *  produced by the app's state_new hook (see app.h) — or NULL when    *
+ *  no state hooks are installed. Mutate it freely: each user gets     *
+ *  their own tree AND their own state, so changes never leak across   *
+ *  visitors.                                                          *
  * ------------------------------------------------------------------ */
 typedef struct cweb_widget cweb_widget;
 typedef struct cweb_event  cweb_event;
@@ -132,7 +140,7 @@ struct cweb_event {
     char    *key;         /* for key events (KeyboardEvent.key)         */
 };
 
-typedef int (*cweb_callback)(cweb_widget *w, cweb_event *ev);
+typedef int (*cweb_callback)(cweb_widget *w, cweb_event *ev, void *state);
 
 /* ------------------------------------------------------------------ *
  *  Image widget                                                       *
@@ -196,12 +204,19 @@ struct cweb_widget {
     char               *content;        /* owned UTF-8 string */
     int                 font_size;      /* px, 0 = inherit */
     char               *font_family;    /* NULL = inherit; e.g. "monospace" */
-    int                 wrap;           /* 1 = soft-wrap long text instead of clipping */
+    /* Text flow: 0 (default) = single line, clipped with a trailing "…"
+       (white-space: nowrap + text-overflow: ellipsis).
+       1 = pre-wrap: keep manual \n breaks and wrap long lines.           */
+    int                 wrap;
 
     /* ---- Container ---- */
     cweb_direction      direction;
     int                 gap;            /* px between children, default 0 */
     int                 scrollable;     /* 1 = overflow: auto */
+    int                 clip;           /* 1 = overflow: hidden — children
+                                           (e.g. big images) are clipped to
+                                           this widget's bounds, including
+                                           its border-radius corners.      */
 
     /* Children (for box and container) */
     struct cweb_widget **children;
@@ -310,6 +325,16 @@ void cweb_widget_set_flex_basis (cweb_widget *w, float basis);  /* px or % */
 /* Z-index (stacking order). Use to ensure sticky elements appear above
    their siblings. Default is -1 (CSS auto). Set to e.g. 100 for headers. */
 void cweb_widget_set_z_index(cweb_widget *w, int z);
+
+/* Clip children to this widget's bounds — emits CSS `overflow: hidden`.
+   Combined with border-radius this is how you make an oversized image
+   get cut off along the rounded corners of its box instead of spilling
+   out:
+       cweb_box_set_border_radius(&card, 16);
+       cweb_widget_set_clip(&card, 1);          // children clipped round  
+   Works on boxes and containers. Mutually exclusive with scrollable
+   (scrollable wins on containers).                                     */
+void cweb_widget_set_clip(cweb_widget *w, int enable);
 
 /* Wrap the widget in an <a href="..."> link. Useful for navigation:
    clicking the widget navigates to the given URL (server route or

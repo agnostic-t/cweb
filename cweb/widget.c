@@ -80,6 +80,11 @@ void cweb_widget_set_z_index(cweb_widget *w, int z) {
     w->z_index = z;
 }
 
+void cweb_widget_set_clip(cweb_widget *w, int enable) {
+    if (!w) return;
+    w->clip = enable ? 1 : 0;
+}
+
 void cweb_widget_set_flex_grow(cweb_widget *w, int grow) {
     if (!w) return;
     w->flex_grow = grow;
@@ -320,10 +325,29 @@ cweb_widget *cweb_widget_clone(const cweb_widget *src) {
 }
 
 /* ------------------------------------------------------------------ *
- *  Registry (lives on the app)                                        *
+ *  Registry (session-aware)                                           *
+ *                                                                    *
+ *  Widget ids are assigned lazily at render time. When a request is   *
+ *  being served the ids live in THAT visitor's session (each session  *
+ *  tree is numbered from 1, so every visitor sees identical HTML);    *
+ *  without a session (--html mode, custom 404 rendering) the app-     *
+ *  level registry is used, exactly like before sessions existed.      *
  * ------------------------------------------------------------------ */
 static int registry_add(cweb_app *app, cweb_widget *w) {
     if (!app || !w) return -1;
+    cweb_session *sess = app->cur_sess;   /* NULL outside request handling */
+    if (sess) {
+        if (sess->registry_count == sess->registry_cap) {
+            size_t nc = sess->registry_cap ? sess->registry_cap * 2 : 16;
+            cweb_widget **na = realloc(sess->registry, nc * sizeof(cweb_widget*));
+            if (!na) return -1;
+            sess->registry = na;
+            sess->registry_cap = nc;
+        }
+        w->id = ++sess->next_id;
+        sess->registry[sess->registry_count++] = w;
+        return w->id;
+    }
     if (app->registry_count == app->registry_cap) {
         size_t nc = app->registry_cap ? app->registry_cap * 2 : 16;
         cweb_widget **na = realloc(app->registry, nc * sizeof(cweb_widget*));

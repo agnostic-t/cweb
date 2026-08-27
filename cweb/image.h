@@ -25,6 +25,10 @@ void cweb_image_set_src   (cweb_widget *img, const char *src);
 void cweb_image_set_alt   (cweb_widget *img, const char *alt);
 void cweb_image_set_size  (cweb_widget *img, int w_px, int h_px);
 void cweb_image_set_fit   (cweb_widget *img, cweb_image_fit fit);
+/* Round the image's own corners (emits border-radius on the <img>).
+   To instead cut the image off along the PARENT box's rounded corners
+   when it overflows, set the parent's clip: cweb_widget_set_clip(p, 1). */
+void cweb_image_set_radius(cweb_widget *img, int radius_px);
 
 #ifdef __cplusplus
 }

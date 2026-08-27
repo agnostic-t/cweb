@@ -18,7 +18,11 @@ void cweb_text_set_color   (cweb_widget *t, int r, int g, int b);
 void cweb_text_set_placement(cweb_widget *t, cweb_placement p);
 void cweb_text_set_font_size(cweb_widget *t, int px);
 void cweb_text_set_font_family(cweb_widget *t, const char *family);
-void cweb_text_set_wrap    (cweb_widget *t, int enable);   /* 1 = soft-wrap */
+/* Text flow. Default: ONE line, clipped with a trailing "…" when it
+   doesn't fit its parent (never overlaps neighbours).
+   set_wrap(1) → pre-wrap: keeps manual \n line breaks AND wraps long
+   lines — use for paragraphs, descriptions, log output.                  */
+void cweb_text_set_wrap    (cweb_widget *t, int enable);   /* 1 = pre-wrap: keep \n + wrap */
 
 #ifdef __cplusplus
 }

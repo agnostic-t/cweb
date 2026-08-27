@@ -9,6 +9,8 @@ int cweb_text_create(cweb_widget *t, const char *content) {
     if (content) {
         t->content = strdup(content);
     }
+
+    t->wrap = 1;
     return 0;
 }
 

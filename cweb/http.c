@@ -14,6 +14,7 @@
 #include <sys/time.h>  /* struct timeval for SO_RCVTIMEO/SO_SNDTIMEO */
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #include <limits.h>    /* PATH_MAX */
 #include <malloc.h>  /* malloc_trim */
 
@@ -21,9 +22,18 @@
  *  Minimal HTTP/1.1 server on raw sockets.                            *
  *                                                                    *
  *  For MVP we support:                                                *
- *    - GET /                  → full HTML page                       *
- *    - POST /api/click?id=N   → invoke on_click, return new HTML     *
- *    - POST /api/input?id=N   → invoke on_input, return new HTML     *
+ *    - GET /                  → full HTML page (per-session tree)    *
+ *    - POST /api/click?id=N   → invoke on_click(w, ev, state), return *
+ *                               the session's re-rendered page       *
+ *    - POST /api/input?id=N   → invoke on_input(w, ev, state), return *
+ *                               the session's re-rendered page       *
+ *                                                                    *
+ *  Sessions: the first visit gets a `cweb_sid` cookie (Set-Cookie,    *
+ *  HttpOnly, SameSite=Lax). The sid maps to a cweb_session holding    *
+ *  the visitor's OWN widget tree and state block, so concurrent       *
+ *  users never see each other's mutations. Static files and          *
+ *  /api/health are stateless and never create sessions. Sessions      *
+ *  are capped with LRU eviction (see cweb_app_set_max_sessions).      *
  *                                                                    *
  *  Robustness contract (hardened):                                   *
  *    - The request is received by a LOOPED read with a per-socket     *
@@ -50,6 +60,9 @@
  *    - One request per connection (Connection: close always).          *
  *    - Single-threaded accept loop: requests are served serially.      *
  *                                                                    *
+ *  For production use, swap this file out for an implementation      *
+ *  based on libmicrohttpd — the public API (cweb_http_serve) stays   *
+ *  the same.                                                          *
  * ------------------------------------------------------------------ */
 
 /* ---- Hardening limits -------------------------------------------------
@@ -65,6 +78,7 @@ typedef struct {
     char    path[1024];
     char   *body;
     size_t  body_len;
+    char    sid[33];      /* cweb_sid cookie value (empty = none/invalid) */
 } http_req;
 
 /* ------------------------------------------------------------------ *
@@ -151,6 +165,44 @@ static long long get_content_length(const char *head, size_t head_len) {
 }
 
 #define CWEB_CL_AMBIGUOUS (LLONG_MIN)
+
+/* Extract the cweb_sid cookie from the HEADER section only.
+ * Accepts strictly [0-9a-f]{1,32} (our own sid format); anything else
+ * is treated as "no cookie" → the caller creates a fresh session.
+ * Cookie attributes after ';' and other cookies are ignored.          */
+static void extract_session_sid(const char *head, size_t head_len,
+                                char out_sid[33]) {
+    out_sid[0] = '\0';
+    const char *p   = head;
+    const char *end = head + head_len;
+    while (p < end) {
+        const char *eol = memmem(p, (size_t)(end - p), "\r\n", 2);
+        size_t linelen = eol ? (size_t)(eol - p) : (size_t)(end - p);
+        if (linelen >= 7 && strncasecmp(p, "cookie:", 7) == 0) {
+            const char *q  = p + 7;
+            const char *le = p + linelen;
+            while (q < le && (*q == ' ' || *q == '\t')) q++;
+            /* scan cookie pairs separated by ';' */
+            for (const char *s = q; s + 9 <= le; s++) {
+                if (strncasecmp(s, "cweb_sid=", 9) == 0) {
+                    const char *v = s + 9;
+                    size_t n = 0;
+                    while (v < le && *v != ';' && *v != ' ' && n < 32) {
+                        char c = *v;
+                        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+                            return;            /* malformed → no session  */
+                        out_sid[n++] = c;
+                        v++;
+                    }
+                    out_sid[n] = '\0';
+                    return;
+                }
+            }
+        }
+        if (!eol) break;
+        p = eol + 2;
+    }
+}
 
 /* Read one full HTTP request: looped read() until "\r\n\r\n" (headers),
  * then exactly Content-Length more body bytes. Enforces caps and
@@ -249,6 +301,9 @@ static int parse_request(const char *raw, size_t raw_len, size_t head_len,
     const char *body_start = (head_len > 0 && head_len <= raw_len)
                                ? raw + head_len : NULL;
 
+    /* Session cookie from the header section (never from the body). */
+    extract_session_sid(raw, head_len, req->sid);
+
     /* Content-Length from the HEADER slice only — a value written into
        the body text must not be able to fake the real length.
        Conflicting duplicate headers were already rejected at recv time
@@ -266,9 +321,13 @@ static int parse_request(const char *raw, size_t raw_len, size_t head_len,
     return 0;
 }
 
-static void send_response(int fd, int status, const char *content_type,
-                          const char *body, size_t body_len) {
-    char header[512];
+/* Core response sender. `extra_headers` (may be NULL) is injected verbatim
+   before the final CRLF — used for Set-Cookie on session-creating
+   responses. Every header string passed here MUST already end with CRLF. */
+static void send_response_ex(int fd, int status, const char *content_type,
+                             const char *body, size_t body_len,
+                             const char *extra_headers) {
+    char header[640];
     const char *status_text = "OK";
     if (status == 301 || status == 302) status_text = "Moved";
     else if (status == 400) status_text = "Bad Request";
@@ -284,16 +343,25 @@ static void send_response(int fd, int status, const char *content_type,
         "Content-Length: %zu\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n"
+        "%s"
         "\r\n",
-        status, status_text, content_type, body_len);
+        status, status_text, content_type, body_len,
+        extra_headers ? extra_headers : "");
     send_all(fd, header, (size_t)hlen);
     send_all(fd, body, body_len);
 }
 
-/* Same as send_response but lets the caller specify a status code AND
-   render the current app->root into HTML. Used by the 404 handler so the
-   custom error page comes back with HTTP 404 (not 200).                    */
-static void send_html_status(cweb_app *app, int fd, int status) {
+static void send_response(int fd, int status, const char *content_type,
+                          const char *body, size_t body_len) {
+    send_response_ex(fd, status, content_type, body, body_len, NULL);
+}
+
+/* Same as send_response_ex but lets the caller specify a status code AND
+   render the ACTIVE tree (the current session's, or app->root when no
+   session is set — used by the 404 handler) into HTML. The error page
+   comes back with HTTP 404 (not 200).                                    */
+static void send_html_status(cweb_app *app, int fd, int status,
+                             const char *extra_headers) {
     size_t html_len = 0;
     char *html = cweb_html_render(app, &html_len);
     char header[512];
@@ -305,8 +373,9 @@ static void send_html_status(cweb_app *app, int fd, int status) {
         "Content-Length: %zu\r\n"
         "Cache-Control: no-store\r\n"
         "Connection: close\r\n"
+        "%s"
         "\r\n",
-        status, status_text, html_len);
+        status, status_text, html_len, extra_headers ? extra_headers : "");
     send_all(fd, header, (size_t)hlen);
     if (html) {
         send_all(fd, html, html_len);
@@ -314,16 +383,20 @@ static void send_html_status(cweb_app *app, int fd, int status) {
     }
 }
 
-/* Send a 301 redirect. Location header is mandatory for redirects. */
-static void send_redirect(int fd, const char *location) {
+/* Send a 301 redirect. Location header is mandatory for redirects.
+   extra_headers carries Set-Cookie when this request created a session
+   (the browser stores it BEFORE following the redirect).               */
+static void send_redirect(int fd, const char *location,
+                          const char *extra_headers) {
     char header[1024];
     int hlen = snprintf(header, sizeof(header),
         "HTTP/1.1 301 Moved\r\n"
         "Location: %s\r\n"
         "Content-Length: 0\r\n"
         "Connection: close\r\n"
+        "%s"
         "\r\n",
-        location);
+        location, extra_headers ? extra_headers : "");
     send_all(fd, header, (size_t)hlen);
 }
 
@@ -430,15 +503,38 @@ static const char *match_redirect(cweb_app *app, const char *path) {
     return NULL;
 }
 
+/* Drop a session's tree + id registry (used when a route rebuilds the
+   page — the session itself and its user state survive).               */
+static void session_drop_tree(cweb_session *sess) {
+    if (!sess) return;
+    if (sess->root) {
+        cweb_widget_free(sess->root);
+        sess->root = NULL;
+    }
+    free(sess->registry);
+    sess->registry = NULL;
+    sess->registry_count = 0;
+    sess->registry_cap = 0;
+    sess->next_id = 0;
+    free(sess->page_key);
+    sess->page_key = NULL;
+}
+
 /* Dispatch a request.
-   - GET /static/…      → static asset from ./static/
-   - GET /api/health → JSON health
-   - POST /api/click?id=N → invoke callback
-   - POST /api/input?id=N → update input buffer
-   - GET <route> → render the matched route's builder output
-   - GET / (no routes) → render app->root (legacy single-page mode)        */
+   - GET /static/…       → static asset from ./static/ (stateless, no session)
+   - GET /api/health     → JSON health (stateless, no session)
+   - everything else resolves to the caller's cweb_session FIRST, so:
+   - POST /api/click?id=N → invoke on_click(w, ev, state) on the SESSION's tree
+   - POST /api/input?id=N → update input buffer + on_input on the SESSION's tree
+   - GET <route>          → reuse / (re)build THIS session's tree via builder
+   - GET / (no routes)    → render the session's private clone of app->root
+
+   A session created by this request is announced via Set-Cookie so the
+   browser sticks to it (fetch() sends same-origin cookies by default).  */
 static void handle_request(cweb_app *app, http_req *req, int fd) {
-    /* Static file serving: /static/foo.png → ./static/foo.png */
+    /* Static file serving: /static/foo.png → ./static/foo.png. Kept
+       BEFORE session resolution: asset floods from cookie-less clients
+       must not churn the session LRU.                                     */
     if (strncmp(req->path, "/static/", 8) == 0) {
         if (serve_static_file(fd, req->path)) return;
         send_response(fd, 404, "text/plain", "Not Found", 9);
@@ -451,37 +547,62 @@ static void handle_request(cweb_app *app, http_req *req, int fd) {
         return;
     }
 
+    /* Resolve this visitor's session (creates it on first visit) and
+       make its tree the ACTIVE one for callbacks, id registration and
+       rendering. Cleared by the caller (cweb_http_serve) afterwards.     */
+    int created = 0;
+    cweb_session *sess = cweb_app_session_get(app,
+                                              req->sid[0] ? req->sid : NULL,
+                                              &created);
+    sess->last_used = ++app->req_counter;
+    app->cur_sess = sess;
+
+    /* First visit: hand the browser its session id. HttpOnly keeps it
+       away from page JS; SameSite=Lax is the safe default.               */
+    char set_cookie[96];
+    const char *cookie_hdr = NULL;
+    if (created) {
+        snprintf(set_cookie, sizeof(set_cookie),
+                 "Set-Cookie: cweb_sid=%s; Path=/; HttpOnly; SameSite=Lax\r\n",
+                 sess->sid);
+        cookie_hdr = set_cookie;
+    }
+
     /* Click callbacks (POST /api/click?id=N).
-       These mutate the current page's state — they don't navigate.        */
+       They mutate THIS visitor's tree with THIS visitor's state — two
+       users clicking the same button never see each other's changes.     */
     if (strcmp(req->method, "POST") == 0 && strncmp(req->path, "/api/click", 10) == 0) {
         int id = extract_query_int(req->path, "id");
-        cweb_widget *w = cweb_widget_find(app->root, id);
+        cweb_widget *w = cweb_widget_find(sess->root, id);
         if (w && w->on_click) {
             cweb_event ev = {0};
-            w->on_click(w, &ev);
+            w->on_click(w, &ev, sess->state);
         }
         size_t html_len = 0;
         char *html = cweb_html_render(app, &html_len);
-        send_response(fd, 200, "text/html; charset=utf-8", html ? html : "", html_len);
+        send_response_ex(fd, 200, "text/html; charset=utf-8",
+                         html ? html : "", html_len, cookie_hdr);
         free(html);
         return;
     }
 
-    /* Input callbacks (POST /api/input?id=N) */
+    /* Input callbacks (POST /api/input?id=N) — buffer + callback live in
+       the session's tree, so typed text is private per user too.         */
     if (strcmp(req->method, "POST") == 0 && strncmp(req->path, "/api/input", 10) == 0) {
         int id = extract_query_int(req->path, "id");
-        cweb_widget *w = cweb_widget_find(app->root, id);
+        cweb_widget *w = cweb_widget_find(sess->root, id);
         if (w && w->inputable) {
             cweb_input_set_value(w, req->body ? req->body : "");
             if (w->on_input) {
                 cweb_event ev = {0};
                 ev.value = req->body ? req->body : "";
-                w->on_input(w, &ev);
+                w->on_input(w, &ev, sess->state);
             }
         }
         size_t html_len = 0;
         char *html = cweb_html_render(app, &html_len);
-        send_response(fd, 200, "text/html; charset=utf-8", html ? html : "", html_len);
+        send_response_ex(fd, 200, "text/html; charset=utf-8",
+                         html ? html : "", html_len, cookie_hdr);
         free(html);
         return;
     }
@@ -495,7 +616,7 @@ static void handle_request(cweb_app *app, http_req *req, int fd) {
         /* Redirects */
         const char *target = match_redirect(app, path);
         if (target) {
-            send_redirect(fd, target);
+            send_redirect(fd, target, cookie_hdr);
             return;
         }
 
@@ -503,84 +624,95 @@ static void handle_request(cweb_app *app, http_req *req, int fd) {
         if (app->routes_count > 0) {
             const cweb_route *r = match_route(app, path);
             if (r) {
-                /* Free previous root + registry (from previous request). */
-                if (app->root) {
-                    cweb_widget_free(app->root);
-                    app->root = NULL;
+                /* Reuse the session's existing tree when the visitor is
+                   re-requesting the page it was built from — per-user
+                   changes (clicks, typed text) survive reloads. A DIFFERENT
+                   path drops the old page and builds a fresh one; the user
+                   state itself survives navigation (it belongs to the
+                   session, not to a page).                                */
+                if (!sess->root || !sess->page_key ||
+                    strcmp(sess->page_key, path) != 0) {
+                    session_drop_tree(sess);
+                    cweb_widget *root = malloc(sizeof(cweb_widget));
+                    if (!root) {
+                        send_response_ex(fd, 500, "text/plain",
+                                         "out of memory", 13, cookie_hdr);
+                        return;
+                    }
+                    cweb_widget_init(root, CWEB_W_CONTAINER);
+                    sess->root = root;
+                    sess->page_key = strdup(path);
+                    r->builder(app, root);
                 }
-                free(app->registry);
-                app->registry = NULL;
-                app->registry_count = 0;
-                app->registry_cap = 0;
-                app->next_id = 0;
-
-                /* Pre-allocate the root widget — the builder will
-                   initialize it and add children. We own this malloc. */
-                cweb_widget *root = malloc(sizeof(cweb_widget));
-                if (!root) {
-                    send_response(fd, 500, "text/plain", "out of memory", 13);
-                    return;
-                }
-                /* Initialize to a sane default so the builder can call
-                   cweb_container_create (which calls cweb_widget_init). */
-                cweb_widget_init(root, CWEB_W_CONTAINER);
-                app->root = root;
-
-                /* Call the builder — it populates root. */
-                r->builder(app, root);
 
                 size_t html_len = 0;
                 char *html = cweb_html_render(app, &html_len);
                 if (html) {
-                    send_response(fd, 200, "text/html; charset=utf-8", html, html_len);
+                    send_response_ex(fd, 200, "text/html; charset=utf-8",
+                                     html, html_len, cookie_hdr);
                     free(html);
                 } else {
-                    send_response(fd, 500, "text/plain", "render error", 12);
+                    send_response_ex(fd, 500, "text/plain", "render error",
+                                     12, cookie_hdr);
                 }
                 return;
             }
             /* No route matched — try the custom 404 handler if registered. */
             if (app->not_found_handler) {
-                if (app->root) {
-                    cweb_widget_free(app->root);
-                    app->root = NULL;
-                }
+                /* The 404 page is stateless: build it into a THROWAWAY
+                   tree rendered against the app-level registry (no
+                   session), leaving the visitor's own tree untouched.     */
+                cweb_widget *saved_root = app->root;  /* NULL in route mode */
+                app->cur_sess = NULL;
                 free(app->registry);
                 app->registry = NULL;
                 app->registry_count = 0;
                 app->registry_cap = 0;
                 app->next_id = 0;
 
-                cweb_widget *root = malloc(sizeof(cweb_widget));
-                if (!root) {
-                    send_response(fd, 500, "text/plain", "out of memory", 13);
+                cweb_widget *troot = malloc(sizeof(cweb_widget));
+                if (!troot) {
+                    app->root = saved_root;
+                    app->cur_sess = sess;
+                    send_response_ex(fd, 500, "text/plain", "out of memory",
+                                     13, cookie_hdr);
                     return;
                 }
-                cweb_widget_init(root, CWEB_W_CONTAINER);
-                app->root = root;
+                cweb_widget_init(troot, CWEB_W_CONTAINER);
+                app->root = troot;
 
-                app->not_found_handler(app, root);
-                send_html_status(app, fd, 404);
+                app->not_found_handler(app, troot);
+                send_html_status(app, fd, 404, cookie_hdr);
+
+                cweb_widget_free(troot);
+                app->root = saved_root;
+                app->cur_sess = sess;
                 return;
             }
-            send_response(fd, 404, "text/plain", "Not Found", 9);
+            send_response_ex(fd, 404, "text/plain", "Not Found", 9, cookie_hdr);
             return;
         }
 
-        /* No routes registered — legacy single-page mode: render app->root
-           for "/" and any other GET path.                                  */
+        /* No routes registered — legacy single-page mode: every visitor
+           renders their own private clone of the prototype root (made
+           when the session was created; re-seeded here if set_root was
+           called after the session already existed).                       */
+        if (!sess->root && app->root) {
+            sess->root = cweb_widget_clone(app->root);
+        }
         size_t html_len = 0;
         char *html = cweb_html_render(app, &html_len);
         if (html) {
-            send_response(fd, 200, "text/html; charset=utf-8", html, html_len);
+            send_response_ex(fd, 200, "text/html; charset=utf-8",
+                             html, html_len, cookie_hdr);
             free(html);
         } else {
-            send_response(fd, 500, "text/plain", "render error", 12);
+            send_response_ex(fd, 500, "text/plain", "render error", 12, cookie_hdr);
         }
         return;
     }
 
-    send_response(fd, 404, "text/plain", "Not Found", 9);
+    send_response_ex(fd, 404, "text/plain", "Not Found", 9, cookie_hdr);
 }
 
 int cweb_http_serve(cweb_app *app) {
@@ -649,6 +781,7 @@ int cweb_http_serve(cweb_app *app) {
             http_req req;
             if (parse_request(raw, raw_len, head_len, &req) == 0) {
                 handle_request(app, &req, cli_fd);
+                app->cur_sess = NULL;   /* no active tree outside requests */
                 free(req.body);
             } else {
                 send_response(cli_fd, 400, "text/plain", "Bad Request", 11);
