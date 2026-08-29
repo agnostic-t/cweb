@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -e
+
+IP=1.2.3.4
+DOMAIN=some_your_domain.xyz
+IDENTITY=~/.ssh/id_ed25519
+USER=root
+
+CWEB_USER=cwebrunner
+CWEB_SERVICE=cwebservice
+
+echo "[deploy] starting script on $DOMAIN ($IP)"
+ssh -i $IDENTITY $USER@$IP -f "rm -rf /var/www/$DOMAIN"
+
+echo "[deploy] copying files"
+
+cd ..
+
+rsync -avr -e "ssh -i $IDENTITY -l $USER" --exclude '.cache' ./$DOMAIN $IP:/var/www/
+
+echo "[deploy] building"
+ssh -i $IDENTITY $USER@$IP -f "cd /var/www/$DOMAIN && ./build/build && chown $CWEB_USER:$CWEB_USER ./build/demo/c4web"
+
+echo "[deploy] running"
+ssh -i $IDENTITY $USER@$IP -f "systemctl restart $CWEB_SERVICE"
+
+echo "[deploy] done"

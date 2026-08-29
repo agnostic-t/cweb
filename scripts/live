@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+import hashlib
+import subprocess
+import time
+from _hashlib import HASH as Hash
+from pathlib import Path
+
+
+def md5_update_from_file(filename: str | Path, hash: Hash) -> Hash:
+    assert Path(filename).is_file()
+    with open(str(filename), "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash.update(chunk)
+    return hash
+
+
+def md5_file(filename: str | Path) -> str:
+    return str(md5_update_from_file(filename, hashlib.md5()).hexdigest())
+
+
+def md5_update_from_dir(directory: str | Path, hash: Hash, exclude: list[str]) -> Hash:
+    assert Path(directory).is_dir()
+    for path in sorted(Path(directory).iterdir(), key=lambda p: str(p).lower()):
+
+        if any(e in path.parts for e in exclude):
+            continue
+
+        hash.update(path.name.encode())
+        if path.is_file():
+            hash = md5_update_from_file(path, hash)
+        elif path.is_dir():
+            hash = md5_update_from_dir(path, hash, exclude)
+    return hash
+
+
+def md5_dir(directory: str | Path, exclude: list[str]) -> str:
+    return str(md5_update_from_dir(directory, hashlib.md5(), exclude).hexdigest())
+
+if __name__ == "__main__":
+    watch = {
+        "files": ["./main.c"],
+        "dirs": ["./cweb"],
+        "exclude": ["build"]
+    }
+
+    interval = 0.5
+    rebuild = ["./build/build"]
+    run = ["./build/demo/c4web"]
+
+    was_fixes_wait = False
+    process = None
+    was_str = ""
+    while True:
+        str_spl = ""
+        for files in watch["files"]:
+            str_spl += md5_file(files)
+
+        for dir in watch["dirs"]:
+            str_spl += md5_dir(dir, watch["exclude"])
+
+        if was_str != str_spl:
+            if process:
+                process.kill()
+
+            print("[live] recompiling...")
+            build_status = subprocess.run(rebuild)
+
+            if build_status.returncode == 0:
+                was_fixes_wait = False
+                print("[live] restarting...")
+                process = subprocess.Popen(run)
+            else:
+                if not was_fixes_wait:
+                    print("[live] build failed, waiting fixes")
+                    was_fixes_wait = True
+                process = None
+
+            was_str = str_spl
+
+        time.sleep(interval)

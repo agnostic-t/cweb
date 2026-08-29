@@ -2,7 +2,7 @@
 
 [![C](https://img.shields.io/badge/language-C-A8B9CC.svg)](https://www.iso.org/standard/82075.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.0.1-orange.svg)
+![Version](https://img.shields.io/badge/version-0.0.2-orange.svg)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-green.svg)
 
 # CWEB
@@ -26,7 +26,7 @@ cweb_app_create(&app, "127.0.0.1", 8080);
 cweb_widget root;
 cweb_container_create(&root, CWEB_VERTICAL);
 cweb_container_set_gap(&root, 12);
-cweb_container_set_padding(&root, 24);
+cweb_container_set_padding(&root, cweb_pad(24));
 
 cweb_widget header;
 cweb_box_create(&header);
@@ -45,4 +45,30 @@ cweb_app_run(&app);
 cweb_app_destroy(&app);
 ```
 
-As you can see, no `malloc()` and `free()` used.
+And notice that no `malloc()` and `free()` was used. Also as example of complex site, built with `cweb` you can look at [worldfreeteam.org](https://worldfreeteam.org)
+
+## Building
+
+Build process is very simple. You can launch:
+```sh
+./build/build
+``` 
+This script will compile and library and your main file to `./build/demo/...`
+
+Also it can be usefull to use a *live* script:
+
+```shell
+./scripts/live
+```
+
+It looks at cweb/ and your main files and when change happens, rebuilds and restarts your website
+
+## Deployment
+
+If you want to share your website with public, than you need some reverse proxy (e.g. Nginx or Caddy) to route traffic to your localhost with cweb program. 
+
+To ensure that your server will be save even if `CWEB` will be exploited, create special user. For example you can use `scripts/setup-user` (at server).
+
+Also you probably will develop site in your localhost and for fast shipping you can use `scripts/deploy`.
+
+Before using any scripts, change there values to yours.

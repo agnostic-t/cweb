@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+# Run this script on server with systemd
+
+NEW_USER=cwebrunner
+ALLOW_PORT=8080
+SYSTEMD_SERVICE=cwebservice
+SITE_TO_LAUNCH="some_your_site.xyz"
+
+PROJECT_DIR="/var/www/$SITE_TO_LAUNCH"
+
+set -e
+
+echo "[setup] creating new user"
+if ! id "$NEW_USER" &>/dev/null; then
+    sudo useradd -r -s /usr/sbin/nologin "$NEW_USER"
+fi
+
+TARGET_UID=$(id -u "$NEW_USER")
+
+echo "[setup] creating iptables rules on port $ALLOW_PORT"
+sudo iptables -D OUTPUT -m owner --uid-owner "$NEW_USER" -o lo -p tcp --dport "$ALLOW_PORT" -j ACCEPT 2>/dev/null || true
+sudo iptables -D OUTPUT -m owner --uid-owner "$NEW_USER" -o lo -p tcp --sport "$ALLOW_PORT" -j ACCEPT 2>/dev/null || true
+sudo iptables -D OUTPUT -m owner --uid-owner "$NEW_USER" -j DROP 2>/dev/null || true
+
+sudo iptables -A OUTPUT -m owner --uid-owner "$NEW_USER" -o lo -p tcp --dport "$ALLOW_PORT" -j ACCEPT
+sudo iptables -A OUTPUT -m owner --uid-owner "$NEW_USER" -o lo -p tcp --sport "$ALLOW_PORT" -j ACCEPT
+sudo iptables -A OUTPUT -m owner --uid-owner "$NEW_USER" -j DROP
+
+echo "[setup] saving iptables rules..."
+if command -v netfilter-persistent &> /dev/null; then
+    sudo netfilter-persistent save
+else
+    sudo mkdir -p /etc/iptables
+    sudo iptables-save | sudo tee /etc/iptables/rules.v4 > /dev/null
+fi
+
+echo "[setup] creation done (user $NEW_USER with UID:$TARGET_UID)"
+
+echo "[setup] creating systemd service for $SITE_TO_LAUNCH"
+
+sudo tee /etc/systemd/system/$SYSTEMD_SERVICE.service > /dev/null <<END
+[Unit]
+Description=CWEB Service
+After=network.target
+
+[Service]
+Type=simple
+
+User=$NEW_USER
+WorkingDirectory=$PROJECT_DIR
+
+ExecStart=$PROJECT_DIR/build/demo/c4web
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=$PROJECT_DIR/static
+
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+END
+
+sudo systemctl daemon-reload
+sudo systemctl enable $SYSTEMD_SERVICE
+
+echo "[setup] systemd service created, run with: sudo systemctl start $SYSTEMD_SERVICE"
