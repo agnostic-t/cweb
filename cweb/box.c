@@ -1,5 +1,7 @@
 #include "cweb/box.h"
 #include "cweb/app.h"
+#include "cweb/colors.h"
+#include "cweb/padnmarg.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -15,14 +17,19 @@ void cweb_box_set_size(cweb_widget *b, float w, float h) {
     b->w = w; b->h = h;
 }
 
-void cweb_box_set_color(cweb_widget *b, int r, int g, int bl) {
+void cweb_box_set_direction(cweb_widget *b, cweb_direction dir){
     if (!b) return;
-    b->r = r; b->g = g; b->b = bl;
+    b->direction = dir;
 }
 
-void cweb_box_set_bg(cweb_widget *b, int r, int g, int bl) {
+void cweb_box_set_color(cweb_widget *b, cweb_rgb rgb) {
     if (!b) return;
-    b->bg_r = r; b->bg_g = g; b->bg_b = bl;
+    b->r = rgb.r; b->g = rgb.g; b->b = rgb.b;
+}
+
+void cweb_box_set_bg(cweb_widget *b, cweb_rgb rgb) {
+    if (!b) return;
+    b->bg_r = rgb.r; b->bg_g = rgb.g; b->bg_b = rgb.b;
 }
 
 void cweb_box_set_border(cweb_widget *b, cweb_border_style style) {
@@ -30,11 +37,11 @@ void cweb_box_set_border(cweb_widget *b, cweb_border_style style) {
     b->border = style;
 }
 
-void cweb_box_set_border_color(cweb_widget *b, int r, int g, int bl) {
+void cweb_box_set_border_color(cweb_widget *b, cweb_rgb rgb) {
     if (!b) return;
-    b->border_r = r;
-    b->border_g = g;
-    b->border_b = bl;
+    b->border_r = rgb.r;
+    b->border_g = rgb.g;
+    b->border_b = rgb.b;
 }
 
 void cweb_box_set_border_radius(cweb_widget *b, int px) {
@@ -42,14 +49,14 @@ void cweb_box_set_border_radius(cweb_widget *b, int px) {
     b->border_radius = px;  /* 0 = sharp; -1 = inherit style default */
 }
 
-void cweb_box_set_padding(cweb_widget *b, int px) {
+void cweb_box_set_padding(cweb_widget *b, cweb_padding pad) {
     if (!b) return;
-    b->padding = px;
+    b->pad = pad;
 }
 
-void cweb_box_set_margin(cweb_widget *b, int px) {
+void cweb_box_set_margin(cweb_widget *b, cweb_margin marg) {
     if (!b) return;
-    b->margin = px;
+    b->marg = marg;
 }
 
 void cweb_box_set_placement(cweb_widget *b, cweb_placement p) {

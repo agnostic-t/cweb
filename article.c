@@ -26,14 +26,14 @@ static void build_header_into(cweb_widget *parent) {
     cweb_widget header;
     cweb_box_create(&header);
     cweb_box_set_size(&header, 1.0f, 0);
-    cweb_box_set_bg(&header, 33, 47, 61);
-    cweb_box_set_padding(&header, 16);
+    cweb_box_set_bg(&header, (cweb_rgb){33, 47, 61});
+    cweb_box_set_padding(&header, cweb_pad(16));
     cweb_widget_set_sticky(&header, CWEB_STICKY_TOP);
     cweb_widget_set_z_index(&header, 100);
     {
         cweb_widget t;
         cweb_text_create(&t, "cweb news");
-        cweb_text_set_color(&t, 255, 255, 255);
+        cweb_text_set_color(&t, CWEB_CLR_WHITE);
         cweb_text_set_style(&t, CWEB_TEXT_BOLD);
         cweb_text_set_font_size(&t, 22);
         cweb_text_set_font_family(&t, "Georgia, serif");
@@ -48,8 +48,8 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     cweb_container_create(root, CWEB_VERTICAL);
     cweb_box_set_size(root, 1.0f, 0);
     cweb_widget_set_min_height_vh(root, 100);
-    cweb_container_set_bg(root, 245, 245, 248);
-    cweb_container_set_padding(root, 24);
+    cweb_container_set_bg(root, (cweb_rgb){245, 245, 248});
+    cweb_container_set_padding(root, cweb_pad(24));
     cweb_container_set_gap(root, 24);
 
     build_header_into(root);
@@ -65,13 +65,13 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     cweb_widget hero;
     cweb_box_create(&hero);
     cweb_box_set_size(&hero, 1.0f, 0);
-    cweb_box_set_bg(&hero, 255, 255, 255);
-    cweb_box_set_padding(&hero, 32);
+    cweb_box_set_bg(&hero, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&hero, cweb_pad(32));
     cweb_box_set_border_radius(&hero, 8);
     {
         cweb_widget t;
         cweb_text_create(&t, "Latest stories");
-        cweb_text_set_color(&t, 30, 30, 40);
+        cweb_text_set_color(&t, (cweb_rgb){30, 30, 40});
         cweb_text_set_style(&t, CWEB_TEXT_BOLD);
         cweb_text_set_font_size(&t, 32);
         cweb_text_set_font_family(&t, "Georgia, serif");
@@ -90,15 +90,15 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     cweb_widget card1;
     cweb_box_create(&card1);
     cweb_box_set_size(&card1, 0.5f, 0);
-    cweb_box_set_bg(&card1, 255, 255, 255);
-    cweb_box_set_padding(&card1, 20);
+    cweb_box_set_bg(&card1, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&card1, cweb_pad(20));
     cweb_box_set_border_radius(&card1, 8);
     cweb_widget_set_link(&card1, "/article/1");
     cweb_widget_set_size_at(&card1, CWEB_MOBILE, 1.0f, 0);
     {
         cweb_widget t;
         cweb_text_create(&t, "AmazonAtlas — 11 October 2018");
-        cweb_text_set_color(&t, 30, 30, 40);
+        cweb_text_set_color(&t, (cweb_rgb){30, 30, 40});
         cweb_text_set_style(&t, CWEB_TEXT_BOLD);
         cweb_text_set_font_size(&t, 20);
         cweb_text_set_font_family(&t, "Georgia, serif");
@@ -108,7 +108,7 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     {
         cweb_widget t;
         cweb_text_create(&t, "WikiLeaks publishes a Highly Confidential internal document from Amazon.");
-        cweb_text_set_color(&t, 80, 80, 90);
+        cweb_text_set_color(&t, (cweb_rgb){80, 80, 90});
         cweb_text_set_font_size(&t, 14);
         cweb_text_set_wrap(&t, 1);
         cweb_box_add_text(&card1, &t);
@@ -119,15 +119,15 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     cweb_widget card2;
     cweb_box_create(&card2);
     cweb_box_set_size(&card2, 0.5f, 0);
-    cweb_box_set_bg(&card2, 255, 255, 255);
-    cweb_box_set_padding(&card2, 20);
+    cweb_box_set_bg(&card2, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&card2, cweb_pad(20));
     cweb_box_set_border_radius(&card2, 8);
     cweb_widget_set_link(&card2, "/article/2");
     cweb_widget_set_size_at(&card2, CWEB_MOBILE, 1.0f, 0);
     {
         cweb_widget t;
         cweb_text_create(&t, "About cweb");
-        cweb_text_set_color(&t, 30, 30, 40);
+        cweb_text_set_color(&t, (cweb_rgb){30, 30, 40});
         cweb_text_set_style(&t, CWEB_TEXT_BOLD);
         cweb_text_set_font_size(&t, 20);
         cweb_text_set_font_family(&t, "Georgia, serif");
@@ -137,7 +137,7 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     {
         cweb_widget t;
         cweb_text_create(&t, "A minimal HTML UI framework in C. This page describes the project.");
-        cweb_text_set_color(&t, 80, 80, 90);
+        cweb_text_set_color(&t, (cweb_rgb){80, 80, 90});
         cweb_text_set_font_size(&t, 14);
         cweb_text_set_wrap(&t, 1);
         cweb_box_add_text(&card2, &t);
@@ -150,8 +150,8 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     cweb_widget search;
     cweb_box_create(&search);
     cweb_box_set_size(&search, 1.0f, 0);
-    cweb_box_set_bg(&search, 255, 255, 255);
-    cweb_box_set_padding(&search, 16);
+    cweb_box_set_bg(&search, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&search, cweb_pad(16));
     cweb_box_set_border_radius(&search, 8);
     cweb_box_set_input(&search, NULL);
     cweb_box_set_placeholder(&search, "Search articles...");
@@ -163,12 +163,12 @@ static void build_front_page(cweb_app *app, cweb_widget *root) {
     cweb_widget footer;
     cweb_box_create(&footer);
     cweb_box_set_size(&footer, 1.0f, 0);
-    cweb_box_set_bg(&footer, 33, 47, 61);
-    cweb_box_set_padding(&footer, 16);
+    cweb_box_set_bg(&footer, (cweb_rgb){33, 47, 61});
+    cweb_box_set_padding(&footer, cweb_pad(16));
     {
         cweb_widget t;
         cweb_text_create(&t, "Built with cweb");
-        cweb_text_set_color(&t, 200, 200, 220);
+        cweb_text_set_color(&t, (cweb_rgb){200, 200, 220});
         cweb_text_set_font_size(&t, 13);
         cweb_text_set_style(&t, CWEB_TEXT_ITALIC);
         cweb_box_add_text(&footer, &t);
@@ -186,22 +186,22 @@ static void build_article_page(cweb_app *app, cweb_widget *root) {
     cweb_container_create(root, CWEB_VERTICAL);
     cweb_box_set_size(root, 1.0f, 0);
     cweb_widget_set_min_height_vh(root, 100);
-    cweb_container_set_bg(root, 245, 245, 248);
-    cweb_container_set_padding(root, 24);
+    cweb_container_set_bg(root, (cweb_rgb){245, 245, 248});
+    cweb_container_set_padding(root, cweb_pad(24));
     cweb_container_set_gap(root, 24);
 
     /* Header with back link */
     cweb_widget header;
     cweb_box_create(&header);
     cweb_box_set_size(&header, 1.0f, 0);
-    cweb_box_set_bg(&header, 33, 47, 61);
-    cweb_box_set_padding(&header, 16);
+    cweb_box_set_bg(&header, (cweb_rgb){33, 47, 61});
+    cweb_box_set_padding(&header, cweb_pad(16));
     cweb_widget_set_sticky(&header, CWEB_STICKY_TOP);
     cweb_widget_set_z_index(&header, 100);
     {
         cweb_widget t;
         cweb_text_create(&t, "← back to cweb news");
-        cweb_text_set_color(&t, 200, 200, 220);
+        cweb_text_set_color(&t, (cweb_rgb){200, 200, 220});
         cweb_text_set_font_size(&t, 14);
         cweb_widget_set_link(&t, "/");
         cweb_box_add_text(&header, &t);
@@ -212,15 +212,15 @@ static void build_article_page(cweb_app *app, cweb_widget *root) {
     cweb_widget article;
     cweb_box_create(&article);
     cweb_box_set_size(&article, 1.0f, 0);
-    cweb_box_set_bg(&article, 255, 255, 255);
-    cweb_box_set_padding(&article, 32);
+    cweb_box_set_bg(&article, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&article, cweb_pad(32));
     cweb_box_set_border_radius(&article, 8);
-    cweb_widget_set_padding_at(&article, CWEB_MOBILE, 16);
+    cweb_widget_set_padding_at(&article, CWEB_MOBILE, cweb_pad(16));
 
     if (article_id == 1) {
         cweb_widget t;
         cweb_text_create(&t, "AmazonAtlas\n11 October, 2018");
-        cweb_text_set_color(&t, 20, 20, 30);
+        cweb_text_set_color(&t, (cweb_rgb){20, 20, 30});
         cweb_text_set_font_family(&t, "Georgia, serif");
         cweb_text_set_font_size(&t, 36);
         cweb_text_set_wrap(&t, 1);
@@ -228,14 +228,14 @@ static void build_article_page(cweb_app *app, cweb_widget *root) {
 
         cweb_widget d;
         cweb_divider_create(&d);
-        cweb_divider_set_color(&d, 100, 100, 110);
+        cweb_divider_set_color(&d, (cweb_rgb){100, 100, 110});
         cweb_widget_add_child(&article, &d);
 
         char *body = read_file("./assets/article_plain.txt");
         if (body) {
             cweb_widget bt;
             cweb_text_create(&bt, body);
-            cweb_text_set_color(&bt, 30, 30, 40);
+            cweb_text_set_color(&bt, (cweb_rgb){30, 30, 40});
             cweb_text_set_font_family(&bt, "Georgia, serif");
             cweb_text_set_font_size(&bt, 18);
             cweb_text_set_wrap(&bt, 1);
@@ -245,7 +245,7 @@ static void build_article_page(cweb_app *app, cweb_widget *root) {
     } else {
         cweb_widget t;
         cweb_text_create(&t, "About cweb");
-        cweb_text_set_color(&t, 20, 20, 30);
+        cweb_text_set_color(&t, (cweb_rgb){20, 20, 30});
         cweb_text_set_font_family(&t, "Georgia, serif");
         cweb_text_set_font_size(&t, 36);
         cweb_text_set_wrap(&t, 1);
@@ -259,7 +259,7 @@ static void build_article_page(cweb_app *app, cweb_widget *root) {
             "Features: routes with path params, sticky headers/footers, "
             "responsive breakpoints, input fields with placeholders, "
             "image embedding, and natural page scrolling.");
-        cweb_text_set_color(&body, 30, 30, 40);
+        cweb_text_set_color(&body, (cweb_rgb){30, 30, 40});
         cweb_text_set_font_family(&body, "Georgia, serif");
         cweb_text_set_font_size(&body, 18);
         cweb_text_set_wrap(&body, 1);
@@ -287,14 +287,14 @@ static void build_about_page(cweb_app *app, cweb_widget *root) {
 static void build_not_found_page(cweb_app *app, cweb_widget *root) {
     cweb_container_create(root, CWEB_VERTICAL);
     cweb_box_set_size(root, 1.0f, 1.0f);
-    cweb_container_set_bg(root, 33, 47, 61);
-    cweb_container_set_padding(root, 48);
+    cweb_container_set_bg(root, (cweb_rgb){33, 47, 61});
+    cweb_container_set_padding(root, cweb_pad(48));
     cweb_container_set_gap(root, 24);
     cweb_box_set_placement(root, CWEB_PLACE_CENTER);
 
     cweb_widget code;
     cweb_text_create(&code, "404");
-    cweb_text_set_color(&code, 255, 100, 100);
+    cweb_text_set_color(&code, (cweb_rgb){255, 100, 100});
     cweb_text_set_style(&code, CWEB_TEXT_BOLD);
     cweb_text_set_font_size(&code, 120);
     cweb_text_set_font_family(&code, "Georgia, serif");
@@ -302,7 +302,7 @@ static void build_not_found_page(cweb_app *app, cweb_widget *root) {
 
     cweb_widget msg;
     cweb_text_create(&msg, "This page got lost in the cloud.");
-    cweb_text_set_color(&msg, 200, 200, 220);
+    cweb_text_set_color(&msg, (cweb_rgb){200, 200, 220});
     cweb_text_set_font_size(&msg, 18);
     cweb_text_set_wrap(&msg, 1);
     cweb_text_set_font_family(&msg, "Georgia, serif");
@@ -310,7 +310,7 @@ static void build_not_found_page(cweb_app *app, cweb_widget *root) {
 
     cweb_widget link;
     cweb_text_create(&link, "← back to cweb news");
-    cweb_text_set_color(&link, 100, 180, 255);
+    cweb_text_set_color(&link, (cweb_rgb){100, 180, 255});
     cweb_text_set_font_size(&link, 16);
     cweb_widget_set_link(&link, "/");
     cweb_container_add(root, &link);

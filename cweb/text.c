@@ -1,4 +1,5 @@
 #include "cweb/text.h"
+#include "cweb/colors.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -25,9 +26,9 @@ void cweb_text_set_style(cweb_widget *t, int style_bitmask) {
     t->style = style_bitmask;
 }
 
-void cweb_text_set_color(cweb_widget *t, int r, int g, int b) {
+void cweb_text_set_color(cweb_widget *t, cweb_rgb rgb) {
     if (!t) return;
-    t->r = r; t->g = g; t->b = b;
+    t->r = rgb.r; t->g = rgb.g; t->b = rgb.b;
 }
 
 void cweb_text_set_placement(cweb_widget *t, cweb_placement p) {

@@ -1,9 +1,10 @@
 #ifndef CWEB_WIDGET_H
 #define CWEB_WIDGET_H
 
+#include "padnmarg.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,58 +14,61 @@ extern "C" {
  *  Widget kinds                                                       *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_W_NONE = 0,
-    CWEB_W_BOX,
-    CWEB_W_TEXT,
-    CWEB_W_CONTAINER,
-    CWEB_W_IMAGE,
+  CWEB_W_NONE = 0,
+  CWEB_W_BOX,
+  CWEB_W_TEXT,
+  CWEB_W_CONTAINER,
+  CWEB_W_IMAGE,
 } cweb_widget_kind;
 
 /* ------------------------------------------------------------------ *
  *  Border styles (mapped to CSS)                                      *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_BORDER_NONE = 0,
-    CWEB_BORDER_SOLID,         /* 1px solid  */
-    CWEB_BORDER_DOUBLE,        /* 3px double */
-    CWEB_BORDER_DASHED,        /* 1px dashed */
-    CWEB_BORDER_DOTTED,        /* 1px dotted */
-    CWEB_BORDER_ROUND,         /* 1px solid + border-radius: 6px */
+  CWEB_BORDER_NONE = 0,
+  CWEB_BORDER_SOLID,  /* 1px solid  */
+  CWEB_BORDER_DOUBLE, /* 3px double */
+  CWEB_BORDER_DASHED, /* 1px dashed */
+  CWEB_BORDER_DOTTED, /* 1px dotted */
+  CWEB_BORDER_ROUND,  /* 1px solid + border-radius: 6px */
 } cweb_border_style;
 
 /* ------------------------------------------------------------------ *
  *  Text style bitmask                                                 *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_TEXT_NORMAL  = 0,
-    CWEB_TEXT_BOLD    = 1 << 0,
-    CWEB_TEXT_ITALIC  = 1 << 1,
-    CWEB_TEXT_UNDER   = 1 << 2,
-    CWEB_TEXT_STRIKE  = 1 << 3,
-    CWEB_TEXT_MONO    = 1 << 4,    /* monospace font */
+  CWEB_TEXT_NORMAL = 0,
+  CWEB_TEXT_BOLD = 1 << 0,
+  CWEB_TEXT_ITALIC = 1 << 1,
+  CWEB_TEXT_UNDER = 1 << 2,
+  CWEB_TEXT_STRIKE = 1 << 3,
+  CWEB_TEXT_MONO = 1 << 4, /* monospace font */
 } cweb_text_style;
 
 /* ------------------------------------------------------------------ *
  *  Placement of a child inside its parent                             *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_PLACE_TOP_LEFT = 0,
-    CWEB_PLACE_TOP,
-    CWEB_PLACE_TOP_RIGHT,
-    CWEB_PLACE_LEFT,
-    CWEB_PLACE_CENTER,
-    CWEB_PLACE_RIGHT,
-    CWEB_PLACE_BOTTOM_LEFT,
-    CWEB_PLACE_BOTTOM,
-    CWEB_PLACE_BOTTOM_RIGHT,
+  CWEB_PLACE_NOT_SET = -1,
+  CWEB_PLACE_TOP_LEFT = 0,
+  CWEB_PLACE_TOP,
+  CWEB_PLACE_TOP_RIGHT,
+  CWEB_PLACE_LEFT,
+  CWEB_PLACE_CENTER,
+  CWEB_PLACE_RIGHT,
+  CWEB_PLACE_CENTER_RIGHT,
+  CWEB_PLACE_CENTER_LEFT,
+  CWEB_PLACE_BOTTOM_LEFT,
+  CWEB_PLACE_BOTTOM,
+  CWEB_PLACE_BOTTOM_RIGHT,
 } cweb_placement;
 
 /* ------------------------------------------------------------------ *
  *  Flex direction                                                     *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_VERTICAL = 0,
-    CWEB_HORIZONTAL,
+  CWEB_VERTICAL = 0,
+  CWEB_HORIZONTAL,
 } cweb_direction;
 
 /* ------------------------------------------------------------------ *
@@ -74,9 +78,9 @@ typedef enum {
  *  `position: sticky; top: 0` (or `bottom: 0`).                         *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_STICKY_NONE = 0,
-    CWEB_STICKY_TOP,
-    CWEB_STICKY_BOTTOM,
+  CWEB_STICKY_NONE = 0,
+  CWEB_STICKY_TOP,
+  CWEB_STICKY_BOTTOM,
 } cweb_sticky;
 
 /* ------------------------------------------------------------------ *
@@ -91,9 +95,9 @@ typedef enum {
  *  overrides it only on narrow screens.                              *
  * ------------------------------------------------------------------ */
 typedef enum {
-    CWEB_DESKTOP = 0,
-    CWEB_TABLET,
-    CWEB_MOBILE,
+  CWEB_DESKTOP = 0,
+  CWEB_TABLET,
+  CWEB_MOBILE,
 } cweb_breakpoint;
 
 /* ------------------------------------------------------------------ *
@@ -102,21 +106,27 @@ typedef enum {
  *  (max 4 active fields per breakpoint) for MVP.                       *
  * ------------------------------------------------------------------ */
 typedef struct {
-    int  active;       /* bitmask: which fields are set on this bp */
-    int  padding;
-    int  margin;
-    int  gap;
-    float w, h;
-    int  hidden;       /* 1 = display:none at this breakpoint */
-    int  direction;     /* -1 = unset; 0 = vertical; 1 = horizontal */
+  int active; /* bitmask: which fields are set on this bp */
+
+  cweb_padding pad;
+  cweb_margin marg;
+  cweb_placement placement;
+
+  int gap;
+  float w, h;
+  float wvh, hvh;
+  int hidden;    /* 1 = display:none at this breakpoint */
+  int direction; /* -1 = unset; 0 = vertical; 1 = horizontal */
 } cweb_bp_override;
 
-#define CWEB_BP_PADDING    (1<<0)
-#define CWEB_BP_MARGIN     (1<<1)
-#define CWEB_BP_GAP        (1<<2)
-#define CWEB_BP_SIZE       (1<<3)
-#define CWEB_BP_HIDDEN     (1<<4)
-#define CWEB_BP_DIRECTION  (1<<5)
+#define CWEB_BP_PADDING (1 << 0)
+#define CWEB_BP_MARGIN (1 << 1)
+#define CWEB_BP_GAP (1 << 2)
+#define CWEB_BP_SIZE (1 << 3)
+#define CWEB_BP_HIDDEN (1 << 4)
+#define CWEB_BP_DIRECTION (1 << 5)
+#define CWEB_BP_SIZE_VH (1 << 6)
+#define CWEB_BP_PLACEMENT (1 << 7)
 
 /* ------------------------------------------------------------------ *
  *  Callbacks                                                          *
@@ -131,13 +141,13 @@ typedef struct {
  *  visitors.                                                          *
  * ------------------------------------------------------------------ */
 typedef struct cweb_widget cweb_widget;
-typedef struct cweb_event  cweb_event;
-typedef struct cweb_app    cweb_app;
+typedef struct cweb_event cweb_event;
+typedef struct cweb_app cweb_app;
 
 struct cweb_event {
-    int      x, y;        /* for mouse events (pixel coords in browser) */
-    char    *value;       /* for input events (UTF-8 string)            */
-    char    *key;         /* for key events (KeyboardEvent.key)         */
+  int x, y;    /* for mouse events (pixel coords in browser) */
+  char *value; /* for input events (UTF-8 string)            */
+  char *key;   /* for key events (KeyboardEvent.key)         */
 };
 
 typedef int (*cweb_callback)(cweb_widget *w, cweb_event *ev, void *state);
@@ -146,11 +156,11 @@ typedef int (*cweb_callback)(cweb_widget *w, cweb_event *ev, void *state);
  *  Image widget                                                       *
  * ------------------------------------------------------------------ */
 typedef struct {
-    char *src;            /* URL or data: URI */
-    char *alt;            /* alt text for accessibility */
-    int   width;          /* px, 0 = auto */
-    int   height;         /* px, 0 = auto */
-    int   fit;            /* 0=fill, 1=contain, 2=cover */
+  char *src;  /* URL or data: URI */
+  char *alt;  /* alt text for accessibility */
+  int width;  /* px, 0 = auto */
+  int height; /* px, 0 = auto */
+  int fit;    /* 0=fill, 1=contain, 2=cover */
 } cweb_image_props;
 
 /* ------------------------------------------------------------------ *
@@ -166,87 +176,88 @@ typedef struct {
  *              browser do the layout.                                 *
  * ------------------------------------------------------------------ */
 struct cweb_widget {
-    /* Identity */
-    int                 id;
-    cweb_widget_kind    kind;
+  /* Identity */
+  int id;
+  cweb_widget_kind kind;
 
-    /* Geometry (CSS percentages) */
-    float               w, h;       /* 0 = auto/flex-grow */
-    float               min_w, min_h;  /* 0 = no min; >0 = min-width/height */
-    int                 min_h_vh;     /* 0 = no vh constraint; >0 = min-height: Xvh */
-    float               max_w, max_h;  /* 0 = no cap; >0 = max-width/height */
-    int                 max_h_vh;      /* 0 = none; >0 = max-height: Xvh */
-    cweb_placement      placement;
-    cweb_sticky         sticky;     /* NONE / TOP / BOTTOM */
-    int                 z_index;    /* stacking order; -1 = auto */
-    int                 flex_grow;  /* default 0 */
-    int                 flex_shrink; /* default 0; -1 = unset */
-    float               flex_basis;  /* 0 = auto; >0 interpreted like size */
+  /* Geometry (CSS percentages) */
+  float w, h;         /* 0 = auto/flex-grow */
+  float wvh, hvh;     /* 0 = no vh */
+  float min_w, min_h; /* 0 = no min; >0 = min-width/height */
+  int min_h_vh;       /* 0 = no vh constraint; >0 = min-height: Xvh */
+  float max_w, max_h; /* 0 = no cap; >0 = max-width/height */
+  int max_h_vh;       /* 0 = none; >0 = max-height: Xvh */
+  cweb_placement placement;
+  cweb_sticky sticky; /* NONE / TOP / BOTTOM */
+  int z_index;        /* stacking order; -1 = auto */
+  int flex_grow;      /* default 0 */
+  int flex_shrink;    /* default 0; -1 = unset */
+  float flex_basis;   /* 0 = auto; >0 interpreted like size */
 
-    /* Colors. -1 = inherit / transparent. */
-    int                 r, g, b;   /* foreground (text + border) */
-    int                 bg_r, bg_g, bg_b;
+  /* Colors. -1 = inherit / transparent. */
+  int r, g, b; /* foreground (text + border) */
+  int bg_r, bg_g, bg_b;
 
-    /* Visibility */
-    int                 visible;
+  /* Visibility */
+  int visible;
 
-    /* ---- Box ---- */
-    cweb_border_style   border;
-    int                 border_radius;  /* px, 0 = sharp corners; -1 = inherit style default */
-    int                 border_r, border_g, border_b;  /* -1 = inherit from r/g/b */
-    int                 padding;        /* px, default 0 */
-    int                 margin;         /* px, default 0 */
-    int                 inputable;      /* 1 = renders <input>/<textarea> even without on_input */
-    char               *box_font_family;  /* NULL = inherit; e.g. "monospace", "Inter" */
+  /* ---- Box ---- */
+  cweb_border_style border;
+  int border_radius; /* px, 0 = sharp corners; -1 = inherit style default */
+  int border_r, border_g, border_b; /* -1 = inherit from r/g/b */
+  cweb_padding pad;                 /* px (>1) and % (<1), default 0 */
+  cweb_margin marg;                 /* px (>1) and % (<1), default 0 */
+  int inputable; /* 1 = renders <input>/<textarea> even without on_input */
+  char *box_font_family; /* NULL = inherit; e.g. "monospace", "Inter" */
 
-    /* ---- Text ---- */
-    int                 style;          /* cweb_text_style bitmask */
-    char               *content;        /* owned UTF-8 string */
-    int                 font_size;      /* px, 0 = inherit */
-    char               *font_family;    /* NULL = inherit; e.g. "monospace" */
-    /* Text flow: 0 (default) = single line, clipped with a trailing "…"
-       (white-space: nowrap + text-overflow: ellipsis).
-       1 = pre-wrap: keep manual \n breaks and wrap long lines.           */
-    int                 wrap;
+  /* ---- Text ---- */
+  int style;         /* cweb_text_style bitmask */
+  char *content;     /* owned UTF-8 string */
+  int font_size;     /* px, 0 = inherit */
+  char *font_family; /* NULL = inherit; e.g. "monospace" */
+  /* Text flow: 0 (default) = single line, clipped with a trailing "…"
+     (white-space: nowrap + text-overflow: ellipsis).
+     1 = pre-wrap: keep manual \n breaks and wrap long lines.           */
+  int wrap;
 
-    /* ---- Container ---- */
-    cweb_direction      direction;
-    int                 gap;            /* px between children, default 0 */
-    int                 scrollable;     /* 1 = overflow: auto */
-    int                 clip;           /* 1 = overflow: hidden — children
-                                           (e.g. big images) are clipped to
-                                           this widget's bounds, including
-                                           its border-radius corners.      */
+  /* ---- Container ---- */
+  cweb_direction direction;
+  int gap;        /* px between children, default 0 */
+  int scrollable; /* 1 = overflow: auto */
+  int clip;       /* 1 = overflow: hidden — children
+                     (e.g. big images) are clipped to
+                     this widget's bounds, including
+                     its border-radius corners.      */
 
-    /* Children (for box and container) */
-    struct cweb_widget **children;
-    size_t              children_count;
-    size_t              children_cap;
+  /* Children (for box and container) */
+  struct cweb_widget **children;
+  size_t children_count;
+  size_t children_cap;
 
-    /* ---- Inputable mixin ---- */
-    cweb_callback       on_click;
-    cweb_callback       on_input;
-    char               *input_buffer;
-    size_t              input_buf_cap;
-    size_t              input_buf_len;
-    int                 multiline;
-    char               *placeholder;   /* placeholder text (grey) */
+  /* ---- Inputable mixin ---- */
+  cweb_callback on_click;
+  cweb_callback on_input;
+  char *input_buffer;
+  size_t input_buf_cap;
+  size_t input_buf_len;
+  int multiline;
+  char *placeholder; /* placeholder text (grey) */
 
-    /* ---- Image ---- */
-    char               *img_src;       /* URL or data: URI */
-    char               *img_alt;       /* alt text */
-    int                 img_width;    /* px, 0 = auto */
-    int                 img_height;   /* px, 0 = auto */
-    int                 img_fit;      /* 0=fill, 1=contain, 2=cover */
+  /* ---- Image ---- */
+  char *img_src;  /* URL or data: URI */
+  char *img_alt;  /* alt text */
+  int img_width;  /* px, 0 = auto */
+  int img_height; /* px, 0 = auto */
+  int img_fit;    /* 0=fill, 1=contain, 2=cover */
 
-    /* ---- Link (URL target for the whole widget) ---- */
-    char               *href;          /* if set, wrap widget in <a href> */
+  /* ---- Link (URL target for the whole widget) ---- */
+  char *href; /* if set, wrap widget in <a href> */
 
-    /* ---- Responsive overrides (per breakpoint) ---- */
-    cweb_bp_override    bp[3];         /* indexed by cweb_breakpoint */
+  /* ---- Responsive overrides (per breakpoint) ---- */
+  cweb_bp_override bp[3]; /* indexed by cweb_breakpoint */
 
-    /* Tree */
-    struct cweb_widget *parent;
+  /* Tree */
+  struct cweb_widget *parent;
 };
 
 /* ---- Lifecycle (used by box/text/container create functions) ---- */
@@ -300,9 +311,9 @@ void cweb_widget_set_min_height_vh(cweb_widget *w, int vh);
    The main use case is scrollable containers (scrollable=1): a fixed-
    unit max-height + overflow:auto makes the list scroll instead of
    stretching to fit every child.                                        */
-void cweb_widget_set_max_size     (cweb_widget *w, float max_w, float max_h);
-void cweb_widget_set_max_width    (cweb_widget *w, float max_w);
-void cweb_widget_set_max_height   (cweb_widget *w, float max_h);
+void cweb_widget_set_max_size(cweb_widget *w, float max_w, float max_h);
+void cweb_widget_set_max_width(cweb_widget *w, float max_w);
+void cweb_widget_set_max_height(cweb_widget *w, float max_h);
 /* Viewport-relative max-height in vh units. Emits "max-height: Xvh" —
    always definite regardless of parent sizing.                          */
 void cweb_widget_set_max_height_vh(cweb_widget *w, int vh);
@@ -318,9 +329,9 @@ void cweb_widget_set_sticky(cweb_widget *w, cweb_sticky s);
    parent's main axis. Use cweb_widget_set_flex_grow(main, 1) on a
    "main content" container so it expands to fill the viewport height,
    pushing subsequent siblings (like a footer) to the bottom.           */
-void cweb_widget_set_flex_grow  (cweb_widget *w, int grow);
+void cweb_widget_set_flex_grow(cweb_widget *w, int grow);
 void cweb_widget_set_flex_shrink(cweb_widget *w, int shrink);
-void cweb_widget_set_flex_basis (cweb_widget *w, float basis);  /* px or % */
+void cweb_widget_set_flex_basis(cweb_widget *w, float basis); /* px or % */
 
 /* Z-index (stacking order). Use to ensure sticky elements appear above
    their siblings. Default is -1 (CSS auto). Set to e.g. 100 for headers. */
@@ -331,7 +342,7 @@ void cweb_widget_set_z_index(cweb_widget *w, int z);
    get cut off along the rounded corners of its box instead of spilling
    out:
        cweb_box_set_border_radius(&card, 16);
-       cweb_widget_set_clip(&card, 1);          // children clipped round  
+       cweb_widget_set_clip(&card, 1);          // children clipped round
    Works on boxes and containers. Mutually exclusive with scrollable
    (scrollable wins on containers).                                     */
 void cweb_widget_set_clip(cweb_widget *w, int enable);
@@ -345,19 +356,25 @@ void cweb_widget_set_link(cweb_widget *w, const char *href);
    Each setter applies only at the given breakpoint, emitted as a CSS
    @media query. The base value (set without _at suffix) applies at all
    sizes; the _at version overrides it on narrower screens.            */
-void cweb_widget_set_padding_at (cweb_widget *w, cweb_breakpoint bp, int px);
-void cweb_widget_set_margin_at  (cweb_widget *w, cweb_breakpoint bp, int px);
-void cweb_widget_set_gap_at     (cweb_widget *w, cweb_breakpoint bp, int px);
-void cweb_widget_set_size_at    (cweb_widget *w, cweb_breakpoint bp,
-                                                  float w_, float h_);
+void cweb_widget_set_padding_at(cweb_widget *w, cweb_breakpoint bp,
+                                cweb_padding pad);
+void cweb_widget_set_margin_at(cweb_widget *w, cweb_breakpoint bp,
+                               cweb_margin marg);
+void cweb_widget_set_gap_at(cweb_widget *w, cweb_breakpoint bp, int px);
+void cweb_widget_set_size_at(cweb_widget *w, cweb_breakpoint bp, float w_,
+                             float h_);
+void cweb_widget_set_placement_at(cweb_widget *w, cweb_breakpoint bp,
+                                  cweb_placement pl);
+void cweb_container_set_size_vh_at(cweb_widget *w, cweb_breakpoint bp,
+                                   float wvh, float hvh);
 /* Override the flex direction at a breakpoint. Use to switch a
    horizontal cards row to vertical stack on mobile.                    */
-void cweb_widget_set_direction_at (cweb_widget *w, cweb_breakpoint bp,
-                                     cweb_direction dir);
+void cweb_widget_set_direction_at(cweb_widget *w, cweb_breakpoint bp,
+                                  cweb_direction dir);
 /* Hide / show a widget at a breakpoint. Useful for hiding sidebars on
    mobile or showing a hamburger menu only on narrow screens.         */
-void cweb_widget_hide_at (cweb_widget *w, cweb_breakpoint bp);
-void cweb_widget_show_at (cweb_widget *w, cweb_breakpoint bp);
+void cweb_widget_hide_at(cweb_widget *w, cweb_breakpoint bp);
+void cweb_widget_show_at(cweb_widget *w, cweb_breakpoint bp);
 
 /* ---- Tree ops ------------------------------------------------------ */
 /* CONSUMING add: makes a deep copy of `child`, attaches it to `parent`,
@@ -370,7 +387,7 @@ void cweb_widget_show_at (cweb_widget *w, cweb_breakpoint bp);
    cannot be copied into two parents via _add calls — to share one
    source between parents use
    cweb_widget_take_child(parent, cweb_widget_clone(&src)).             */
-int  cweb_widget_add_child(cweb_widget *parent, cweb_widget *child);
+int cweb_widget_add_child(cweb_widget *parent, cweb_widget *child);
 
 /* Takes ownership of `child` — NO deep copy. The pointer is attached
    directly to `parent`'s children array and will be freed when `parent`
@@ -381,7 +398,7 @@ int  cweb_widget_add_child(cweb_widget *parent, cweb_widget *child);
    After this call, the caller MUST NOT touch `child` — the library owns
    it. Returns the child's id (assigned lazily during render), or -1 on
    failure. */
-int  cweb_widget_take_child(cweb_widget *parent, cweb_widget *child);
+int cweb_widget_take_child(cweb_widget *parent, cweb_widget *child);
 
 /* ---- Lookup (the user can also keep their own id variables) ---- */
 cweb_widget *cweb_widget_find(cweb_widget *root, int id);

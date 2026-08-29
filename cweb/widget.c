@@ -1,5 +1,6 @@
 #include "cweb/widget.h"
 #include "cweb/app.h"
+#include "cweb/padnmarg.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +13,7 @@ void cweb_widget_init(cweb_widget *w, cweb_widget_kind kind) {
     memset(w, 0, sizeof(*w));
     w->kind   = kind;
     w->w      = 1.0f;
-    w->h      = 1.0f;
+    w->h      = 0.0f;
     w->min_w  = 0.0f;
     w->min_h  = 0.0f;
     w->z_index = -1;
@@ -109,15 +110,15 @@ void cweb_widget_set_link(cweb_widget *w, const char *href) {
     w->href = href ? strdup(href) : NULL;
 }
 
-void cweb_widget_set_padding_at(cweb_widget *w, cweb_breakpoint bp, int px) {
+void cweb_widget_set_padding_at(cweb_widget *w, cweb_breakpoint bp, cweb_padding pad) {
     if (!w || bp < 0 || bp > 2) return;
-    w->bp[bp].padding = px;
+    w->bp[bp].pad = pad;
     w->bp[bp].active |= CWEB_BP_PADDING;
 }
 
-void cweb_widget_set_margin_at(cweb_widget *w, cweb_breakpoint bp, int px) {
+void cweb_widget_set_margin_at(cweb_widget *w, cweb_breakpoint bp, cweb_margin marg) {
     if (!w || bp < 0 || bp > 2) return;
-    w->bp[bp].margin = px;
+    w->bp[bp].marg = marg;
     w->bp[bp].active |= CWEB_BP_MARGIN;
 }
 
@@ -132,6 +133,19 @@ void cweb_widget_set_size_at(cweb_widget *w, cweb_breakpoint bp, float w_, float
     w->bp[bp].w = w_;
     w->bp[bp].h = h_;
     w->bp[bp].active |= CWEB_BP_SIZE;
+}
+
+void cweb_widget_set_placement_at(cweb_widget *w, cweb_breakpoint bp, cweb_placement pl) {
+    if (!w || bp < 0 || bp > 2) return;
+    w->bp[bp].placement = pl;
+    w->bp[bp].active |= CWEB_BP_PLACEMENT;
+}
+
+void cweb_container_set_size_vh_at(cweb_widget *w, cweb_breakpoint bp, float wvh, float hvh){
+    if (!w || bp < 0 || bp > 2) return;
+    w->bp[bp].wvh = wvh;
+    w->bp[bp].hvh = hvh;
+    w->bp[bp].active |= CWEB_BP_SIZE_VH;
 }
 
 void cweb_widget_set_direction_at(cweb_widget *w, cweb_breakpoint bp, cweb_direction dir) {

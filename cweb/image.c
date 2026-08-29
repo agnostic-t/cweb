@@ -39,3 +39,13 @@ void cweb_image_set_radius(cweb_widget *img, int radius_px) {
     if (!img) return;
     img->border_radius = radius_px > 0 ? radius_px : 0;
 }
+
+void cweb_image_set_pad(cweb_widget *img, cweb_padding pad) {
+    if (!img) return;
+    img->pad = pad;
+}
+
+void cweb_image_set_marg(cweb_widget *img, cweb_margin marg) {
+    if (!img) return;
+    img->marg = marg;
+}

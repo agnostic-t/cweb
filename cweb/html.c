@@ -117,6 +117,8 @@ static const char *placement_align(cweb_placement p) {
         case CWEB_PLACE_TOP:
         case CWEB_PLACE_CENTER:
         case CWEB_PLACE_BOTTOM:
+        case CWEB_PLACE_CENTER_LEFT:
+        case CWEB_PLACE_CENTER_RIGHT:
             return "center";
         case CWEB_PLACE_TOP_RIGHT:
         case CWEB_PLACE_RIGHT:
@@ -131,6 +133,7 @@ static const char *placement_valign(cweb_placement p) {
         case CWEB_PLACE_TOP_LEFT:
         case CWEB_PLACE_TOP:
         case CWEB_PLACE_TOP_RIGHT:
+        case CWEB_PLACE_CENTER_LEFT:
             return "flex-start";
         case CWEB_PLACE_LEFT:
         case CWEB_PLACE_CENTER:
@@ -139,6 +142,7 @@ static const char *placement_valign(cweb_placement p) {
         case CWEB_PLACE_BOTTOM_LEFT:
         case CWEB_PLACE_BOTTOM:
         case CWEB_PLACE_BOTTOM_RIGHT:
+        case CWEB_PLACE_CENTER_RIGHT:
             return "flex-end";
         default: return "flex-start";
     }
@@ -159,6 +163,9 @@ static void render_size(strbuf *out, cweb_widget *w) {
     if (w->h > 0 && w->h <= 1.0f) sb_appendf(out, "height: %d%%; ", (int)(w->h * 100));
     else if (w->h > 1.0f)         sb_appendf(out, "height: %dpx; ", (int)w->h);
     /* h == 0 → auto (grow with content) */
+
+    if (w->hvh > 0) sb_appendf(out, "height: %dvh; ", (int)(w->hvh));
+    if (w->wvh > 0) sb_appendf(out, "width: %dvw; ", (int)(w->wvh));
 
     /* min-width */
     if (w->min_w > 0 && w->min_w <= 1.0f)
@@ -240,14 +247,33 @@ static void render_box(cweb_widget *w, strbuf *out) {
         valign = "flex-start";
     }
 
-    sb_appendf(out, "<div id=\"w%d\" style=\"display: flex; flex-direction: column; align-items: %s; justify-content: %s; ",
+    sb_appendf(out, "<div id=\"w%d\" style=\"display: flex; flex-direction: %s; align-items: %s; justify-content: %s; ",
                 w->id,
+                w->direction == CWEB_VERTICAL ? "column" : "row",
                 halign,
                 valign);
 
     render_size(out, w);
-    if (w->padding > 0) sb_appendf(out, "padding: %dpx; ", w->padding);
-    if (w->margin  > 0) sb_appendf(out, "margin: %dpx; ",  w->margin);
+    if (cweb_pad_nz(w->pad))
+        sb_appendf(
+            out,
+            "padding: %d%s %d%s %d%s %d%s; ",
+            w->pad.top > 0 ? (int)(w->pad.top < 1? w->pad.top * 100: w->pad.top): 0, (w->pad.top > 1 ? "px": "%"),
+            w->pad.right > 0 ? (int)(w->pad.right < 1? w->pad.right * 100: w->pad.right): 0, (w->pad.right > 1 ? "px": "%"),
+            w->pad.bottom > 0 ? (int)(w->pad.bottom < 1? w->pad.bottom * 100: w->pad.bottom): 0, (w->pad.bottom > 1 ? "px": "%"),
+            w->pad.left > 0 ? (int)(w->pad.left < 1? w->pad.left * 100: w->pad.left): 0, (w->pad.left > 1 ? "px": "%")
+        );
+
+    if (cweb_marg_nz(w->marg))
+        sb_appendf(
+            out,
+            "margin: %d%s %d%s %d%s %d%s; ",
+            w->marg.top > 0 ? (int)(w->marg.top < 1? w->marg.top * 100: w->marg.top): 0, (w->marg.top > 1 ? "px": "%"),
+            w->marg.right > 0 ? (int)(w->marg.right < 1? w->marg.right * 100: w->marg.right): 0, (w->marg.right > 1 ? "px": "%"),
+            w->marg.bottom > 0 ? (int)(w->marg.bottom < 1? w->marg.bottom * 100: w->marg.bottom): 0, (w->marg.bottom > 1 ? "px": "%"),
+            w->marg.left > 0 ? (int)(w->marg.left < 1? w->marg.left * 100: w->marg.left): 0, (w->marg.left > 1 ? "px": "%")
+        );
+
     sb_append_color(out, "color", w->r, w->g, w->b);
     sb_append_color(out, "background-color", w->bg_r, w->bg_g, w->bg_b);
     if (w->box_font_family) {
@@ -403,22 +429,92 @@ static void render_image(cweb_widget *w, strbuf *out) {
        the image against the PARENT's rounded box instead, set the parent
        clip: cweb_widget_set_clip(parent, 1).                             */
     if (w->border_radius > 0) sb_appendf(out, "border-radius: %dpx; ", w->border_radius);
-    sb_append(out, "max-width: 100%; height: auto;\" />");
+
+    if (cweb_pad_nz(w->pad))
+        sb_appendf(
+            out,
+            "padding: %d%s %d%s %d%s %d%s; ",
+            w->pad.top > 0 ? (int)(w->pad.top < 1? w->pad.top * 100: w->pad.top): 0, (w->pad.top > 1 ? "px": "%"),
+            w->pad.right > 0 ? (int)(w->pad.right < 1? w->pad.right * 100: w->pad.right): 0, (w->pad.right > 1 ? "px": "%"),
+            w->pad.bottom > 0 ? (int)(w->pad.bottom < 1? w->pad.bottom * 100: w->pad.bottom): 0, (w->pad.bottom > 1 ? "px": "%"),
+            w->pad.left > 0 ? (int)(w->pad.left < 1? w->pad.left * 100: w->pad.left): 0, (w->pad.left > 1 ? "px": "%")
+        );
+
+    if (cweb_marg_nz(w->marg))
+        sb_appendf(
+            out,
+            "margin: %d%s %d%s %d%s %d%s; ",
+            w->marg.top > 0 ? (int)(w->marg.top < 1? w->marg.top * 100: w->marg.top): 0, (w->marg.top > 1 ? "px": "%"),
+            w->marg.right > 0 ? (int)(w->marg.right < 1? w->marg.right * 100: w->marg.right): 0, (w->marg.right > 1 ? "px": "%"),
+            w->marg.bottom > 0 ? (int)(w->marg.bottom < 1? w->marg.bottom * 100: w->marg.bottom): 0, (w->marg.bottom > 1 ? "px": "%"),
+            w->marg.left > 0 ? (int)(w->marg.left < 1? w->marg.left * 100: w->marg.left): 0, (w->marg.left > 1 ? "px": "%")
+        );
+
+    sb_append(out, "\" />"); // max-width: 100%; height: auto;
 }
 
 static void render_container(cweb_widget *w, strbuf *out) {
-    sb_appendf(out, "<div id=\"w%d\" style=\"display: flex; flex-direction: %s; ",
-                w->id,
-                w->direction == CWEB_VERTICAL ? "column" : "row");
+
+    const char *halign = placement_align(w->placement);
+    const char *valign = placement_valign(w->placement);
+    if (w->inputable) {
+        halign = "stretch";
+        valign = "flex-start";
+    }
+
+    if (w->placement != CWEB_PLACE_NOT_SET) {
+        sb_appendf(out, "<div id=\"w%d\" style=\"display: flex; flex-direction: %s;  align-items: %s; justify-content: %s;",
+                    w->id,
+                    w->direction == CWEB_VERTICAL ? "column" : "row",
+                    halign,
+                    valign);
+    } else {
+        sb_appendf(out, "<div id=\"w%d\" style=\"display: flex; flex-direction: %s;",
+                    w->id,
+                    w->direction == CWEB_VERTICAL ? "column" : "row");
+    }
     render_size(out, w);
     if (w->gap > 0)     sb_appendf(out, "gap: %dpx; ", w->gap);
-    if (w->padding > 0) sb_appendf(out, "padding: %dpx; ", w->padding);
+
+    if (cweb_pad_nz(w->pad))
+        sb_appendf(
+            out,
+            "padding: %d%s %d%s %d%s %d%s; ",
+            w->pad.top > 0 ? (int)(w->pad.top < 1? w->pad.top * 100: w->pad.top): 0, (w->pad.top > 1 ? "px": "%"),
+            w->pad.right > 0 ? (int)(w->pad.right < 1? w->pad.right * 100: w->pad.right): 0, (w->pad.right > 1 ? "px": "%"),
+            w->pad.bottom > 0 ? (int)(w->pad.bottom < 1? w->pad.bottom * 100: w->pad.bottom): 0, (w->pad.bottom > 1 ? "px": "%"),
+            w->pad.left > 0 ? (int)(w->pad.left < 1? w->pad.left * 100: w->pad.left): 0, (w->pad.left > 1 ? "px": "%")
+        );
+
+    if (cweb_marg_nz(w->marg))
+        sb_appendf(
+            out,
+            "margin: %d%s %d%s %d%s %d%s; ",
+            w->marg.top > 0 ? (int)(w->marg.top < 1? w->marg.top * 100: w->marg.top): 0, (w->marg.top > 1 ? "px": "%"),
+            w->marg.right > 0 ? (int)(w->marg.right < 1? w->marg.right * 100: w->marg.right): 0, (w->marg.right > 1 ? "px": "%"),
+            w->marg.bottom > 0 ? (int)(w->marg.bottom < 1? w->marg.bottom * 100: w->marg.bottom): 0, (w->marg.bottom > 1 ? "px": "%"),
+            w->marg.left > 0 ? (int)(w->marg.left < 1? w->marg.left * 100: w->marg.left): 0, (w->marg.left > 1 ? "px": "%")
+        );
+
     sb_append_color(out, "background-color", w->bg_r, w->bg_g, w->bg_b);
+
+    const char *bc = border_css(w->border);
+    if (bc) {
+        int br = w->border_r >= 0 ? w->border_r : (w->r >= 0 ? w->r : 0);
+        int bg = w->border_g >= 0 ? w->border_g : (w->g >= 0 ? w->g : 0);
+        int bb = w->border_b >= 0 ? w->border_b : (w->b >= 0 ? w->b : 0);
+        sb_appendf(out, "border: %s rgb(%d,%d,%d); ", bc, br, bg, bb);
+    }
+
     if (w->scrollable) {
         sb_append(out, "overflow: auto; ");
     } else if (w->clip) {
         /* scrollable wins — a scroll area already constrains its children. */
         sb_append(out, "overflow: hidden; ");
+    }
+
+    if (w->border_radius >= 0) {
+        sb_appendf(out, "border-radius: %dpx; ", w->border_radius);
     }
 
     /* Close the style attribute */
@@ -488,11 +584,26 @@ static void emit_bp_rules(cweb_widget *w, cweb_breakpoint bp, strbuf *out) {
         any = 1;
     }
     if (o->active & CWEB_BP_PADDING) {
-        sb_appendf(out, "padding: %dpx !important; ", o->padding);
+        sb_appendf(
+            out,
+            "padding: %d%s %d%s %d%s %d%s !important; ",
+            o->pad.top > 0 ? (int)(o->pad.top < 1? o->pad.top * 100: o->pad.top): 0, (o->pad.top > 1 ? "px": "%"),
+            o->pad.right > 0 ? (int)(o->pad.right < 1? o->pad.right * 100: o->pad.right): 0, (o->pad.right > 1 ? "px": "%"),
+            o->pad.bottom > 0 ? (int)(o->pad.bottom < 1? o->pad.bottom * 100: o->pad.bottom): 0, (o->pad.bottom > 1 ? "px": "%"),
+            o->pad.left > 0 ? (int)(o->pad.left < 1? o->pad.left * 100: o->pad.left): 0, (o->pad.left > 1 ? "px": "%")
+        );
         any = 1;
     }
     if (o->active & CWEB_BP_MARGIN) {
-        sb_appendf(out, "margin: %dpx !important; ", o->margin);
+        sb_appendf(
+            out,
+            "margin: %d%s %d%s %d%s %d%s !important; ",
+            o->marg.top > 0 ? (int)(o->marg.top < 1? o->marg.top * 100: o->marg.top): 0, (o->marg.top > 1 ? "px": "%"),
+            o->marg.right > 0 ? (int)(o->marg.right < 1? o->marg.right * 100: o->marg.right): 0, (o->marg.right > 1 ? "px": "%"),
+            o->marg.bottom > 0 ? (int)(o->marg.bottom < 1? o->marg.bottom * 100: o->marg.bottom): 0, (o->marg.bottom > 1 ? "px": "%"),
+            o->marg.left > 0 ? (int)(o->marg.left < 1? o->marg.left * 100: o->marg.left): 0, (o->marg.left > 1 ? "px": "%")
+        );
+
         any = 1;
     }
     if (o->active & CWEB_BP_GAP) {
@@ -506,9 +617,22 @@ static void emit_bp_rules(cweb_widget *w, cweb_breakpoint bp, strbuf *out) {
         else if (o->h > 1.0f)         sb_appendf(out, "height: %dpx !important; ", (int)o->h);
         any = 1;
     }
+    if (o->active & CWEB_BP_SIZE_VH) {
+        if (o->wvh > 0) sb_appendf(out, "width: %dvw !important; ", (int)(o->wvh));
+        if (o->hvh > 0) sb_appendf(out, "height: %dvh !important; ", (int)(o->hvh));
+        any = 1;
+    }
     if (o->active & CWEB_BP_DIRECTION) {
         sb_appendf(out, "flex-direction: %s !important; ",
                    o->direction == CWEB_HORIZONTAL ? "row" : "column");
+        any = 1;
+    }
+    if (o->active & CWEB_BP_PLACEMENT) {
+        const char *halign = placement_align(o->placement);
+        const char *valign = placement_valign(o->placement);
+
+        sb_appendf(out, "align-items: %s !important; justify-content: %s !important; ",
+                   halign, valign);
         any = 1;
     }
     if (any) {

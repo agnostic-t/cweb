@@ -37,7 +37,7 @@ int on_click(cweb_widget *w, cweb_event *ev, void *state) {
     (void)ev;
     demo_state *st = state;
     st->clicks++;
-    cweb_box_set_bg(w, 0, 0, 0);
+    cweb_box_set_bg(w, CWEB_CLR_BLACK);
     if (w->children_count > 0) {
         char label[96];
         snprintf(label, sizeof(label),
@@ -84,15 +84,15 @@ int main(int argc, char **argv) {
     cweb_widget root;
     cweb_container_create(&root, CWEB_VERTICAL);
     cweb_container_set_gap(&root, 12);
-    cweb_container_set_padding(&root, 24);
+    cweb_container_set_padding(&root, cweb_pad(24));
     cweb_widget_set_min_height_vh(&root, 100);
 
     /* 1) Header: a colored box with bold white text — no border, rounded corners */
     cweb_widget header;
     cweb_box_create(&header);
     cweb_box_set_size(&header, 1.0f, 0.1f);
-    cweb_box_set_bg(&header, 60, 100, 200);
-    cweb_box_set_padding(&header, 16);
+    cweb_box_set_bg(&header, (cweb_rgb){60, 100, 200});
+    cweb_box_set_padding(&header, cweb_pad(16));
     cweb_box_set_border_radius(&header, 12);
     cweb_box_set_placement(&header, CWEB_PLACE_CENTER);
     cweb_box_set_font_family(&header, "Georgia, serif");
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     cweb_widget header_text;
     cweb_text_create(&header_text, "cweb demo");
     cweb_text_set_style(&header_text, CWEB_TEXT_BOLD);
-    cweb_text_set_color(&header_text, 255, 255, 255);
+    cweb_text_set_color(&header_text, CWEB_CLR_WHITE);
     cweb_text_set_font_size(&header_text, 28);
     cweb_box_add_text(&header, &header_text);
 
@@ -116,16 +116,16 @@ int main(int argc, char **argv) {
     cweb_widget ok;
     cweb_box_create(&ok);
     cweb_box_set_size(&ok, 0.5f, 1.0f);
-    cweb_box_set_bg(&ok, 60, 180, 80);
-    cweb_box_set_color(&ok, 255, 255, 255);
-    cweb_box_set_padding(&ok, 16);
+    cweb_box_set_bg(&ok, (cweb_rgb){60, 180, 80});
+    cweb_box_set_color(&ok, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&ok, cweb_pad(16));
     cweb_box_set_border_radius(&ok, 8);
     cweb_box_set_placement(&ok, CWEB_PLACE_CENTER);
     cweb_box_set_on_click(&ok, on_click);
     {
         cweb_widget t;
         cweb_text_create(&t, "Click me — I turn black");
-        cweb_text_set_color(&t, 255, 255, 255);
+        cweb_text_set_color(&t, CWEB_CLR_WHITE);
         cweb_text_set_style(&t, CWEB_TEXT_BOLD);
         cweb_text_set_wrap(&t, 0);
         cweb_box_add_text(&ok, &t);
@@ -136,18 +136,18 @@ int main(int argc, char **argv) {
     cweb_widget cancel;
     cweb_box_create(&cancel);
     cweb_box_set_size(&cancel, 0.5f, 1.0f);
-    cweb_box_set_bg(&cancel, 200, 60, 60);
+    cweb_box_set_bg(&cancel, (cweb_rgb){200, 60, 60});
     cweb_box_set_border(&cancel, CWEB_BORDER_SOLID);
-    cweb_box_set_border_color(&cancel, 255, 255, 255);
+    cweb_box_set_border_color(&cancel, CWEB_CLR_WHITE);
     cweb_box_set_border_radius(&cancel, 20);
-    cweb_box_set_color(&cancel, 255, 255, 255);
-    cweb_box_set_padding(&cancel, 16);
+    cweb_box_set_color(&cancel, CWEB_CLR_WHITE);
+    cweb_box_set_padding(&cancel, cweb_pad(16));
     cweb_box_set_placement(&cancel, CWEB_PLACE_CENTER);
     cweb_box_set_on_click(&cancel, on_click);
     {
         cweb_widget t;
         cweb_text_create(&t, "Or click me");
-        cweb_text_set_color(&t, 255, 255, 255);
+        cweb_text_set_color(&t, CWEB_CLR_WHITE);
         cweb_text_set_style(&t, CWEB_TEXT_BOLD);
         cweb_text_set_wrap(&t, 0);
         cweb_box_add_text(&cancel, &t);
@@ -161,14 +161,14 @@ int main(int argc, char **argv) {
     cweb_box_create(&input_box);
     cweb_box_set_size(&input_box, 1.0f, 0.1f);
     cweb_box_set_border(&input_box, CWEB_BORDER_ROUND);
-    cweb_box_set_color(&input_box, 100, 200, 100);
-    cweb_box_set_padding(&input_box, 12);
+    cweb_box_set_color(&input_box, (cweb_rgb){100, 200, 100});
+    cweb_box_set_padding(&input_box, cweb_pad(12));
     cweb_box_set_input(&input_box, on_input);
     cweb_box_set_font_family(&input_box, "'SF Mono', Consolas, monospace");
     {
         cweb_widget t;
         cweb_text_create(&t, "Type 'Hi' and watch it become 'Bye':");
-        cweb_text_set_color(&t, 180, 180, 180);
+        cweb_text_set_color(&t, (cweb_rgb){180, 180, 180});
         cweb_text_set_font_size(&t, 14);
         cweb_box_add_text(&input_box, &t);
     }
@@ -179,16 +179,16 @@ int main(int argc, char **argv) {
     cweb_box_create(&ml_box);
     cweb_box_set_size(&ml_box, 1.0f, 0.3f);
     cweb_box_set_border(&ml_box, CWEB_BORDER_SOLID);
-    cweb_box_set_border_color(&ml_box, 255, 200, 100);
+    cweb_box_set_border_color(&ml_box, (cweb_rgb){255, 200, 100});
     cweb_box_set_border_radius(&ml_box, 12);
-    cweb_box_set_color(&ml_box, 230, 230, 230);
-    cweb_box_set_padding(&ml_box, 12);
+    cweb_box_set_color(&ml_box, (cweb_rgb){230, 230, 230});
+    cweb_box_set_padding(&ml_box, cweb_pad(12));
     cweb_box_set_input(&ml_box, on_input);
     cweb_box_set_multiline(&ml_box, 1);
     {
         cweb_widget t;
         cweb_text_create(&t, "Multiline textarea (type 'Hi' for a surprise):");
-        cweb_text_set_color(&t, 180, 180, 180);
+        cweb_text_set_color(&t, (cweb_rgb){180, 180, 180});
         cweb_text_set_font_size(&t, 14);
         cweb_box_add_text(&ml_box, &t);
     }
@@ -201,15 +201,15 @@ int main(int argc, char **argv) {
     cweb_widget wrap_box;
     cweb_box_create(&wrap_box);
     cweb_box_set_size(&wrap_box, 1.0f, 0.15f);
-    cweb_box_set_bg(&wrap_box, 40, 40, 60);
-    cweb_box_set_padding(&wrap_box, 12);
+    cweb_box_set_bg(&wrap_box, (cweb_rgb){40, 40, 60});
+    cweb_box_set_padding(&wrap_box, cweb_pad(12));
     cweb_box_set_border_radius(&wrap_box, 6);
     {
         cweb_widget t;
         cweb_text_create(&t,
             "Default text: one line — narrow the window and it ends with "
             "an ellipsis right at the box edge instead of spilling over.");
-        cweb_text_set_color(&t, 200, 200, 200);
+        cweb_text_set_color(&t, (cweb_rgb){200, 200, 200});
         cweb_text_set_font_size(&t, 14);
         cweb_box_add_text(&wrap_box, &t);
     }
@@ -218,7 +218,7 @@ int main(int argc, char **argv) {
         cweb_text_create(&t,
             "wrap=1 keeps manual breaks:\nsecond line,\nthird line — "
             "and a long tail that still auto-wraps when it reaches the box edge.");
-        cweb_text_set_color(&t, 200, 200, 200);
+        cweb_text_set_color(&t, (cweb_rgb){200, 200, 200});
         cweb_text_set_font_size(&t, 14);
         cweb_box_add_text(&wrap_box, &t);
     }
@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
     cweb_widget clip_box;
     cweb_box_create(&clip_box);
     cweb_box_set_size(&clip_box, 1.0f, 0.16f);
-    cweb_box_set_bg(&clip_box, 70, 130, 180);
+    cweb_box_set_bg(&clip_box, (cweb_rgb){70, 130, 180});
     cweb_box_set_border_radius(&clip_box, 24);
     cweb_widget_set_clip(&clip_box, 1);
     {
@@ -258,8 +258,8 @@ int main(int argc, char **argv) {
     cweb_container_set_size(&scroll_area, 1.0f, 0);
     cweb_widget_set_max_height(&scroll_area, 240);   /* >1 = px; try _vh too */
     cweb_container_set_scrollable(&scroll_area, 1);
-    cweb_container_set_bg(&scroll_area, 30, 30, 50);
-    cweb_container_set_padding(&scroll_area, 12);
+    cweb_container_set_bg(&scroll_area, (cweb_rgb){30, 30, 50});
+    cweb_container_set_padding(&scroll_area, cweb_pad(12));
 
     char label[64];
     for (int i = 0; i < 20; i++) {
@@ -267,12 +267,12 @@ int main(int argc, char **argv) {
         cweb_widget item;
         cweb_box_create(&item);
         cweb_box_set_size(&item, 1.0f, 0);
-        cweb_box_set_bg(&item, 60 + i*5, 80, 120);
-        cweb_box_set_padding(&item, 8);
+        cweb_box_set_bg(&item, (cweb_rgb){60 + i*5, 80, 120});
+        cweb_box_set_padding(&item, cweb_pad(8));
         cweb_box_set_border_radius(&item, 4);
         cweb_widget t;
         cweb_text_create(&t, label);
-        cweb_text_set_color(&t, 255, 255, 255);
+        cweb_text_set_color(&t, CWEB_CLR_WHITE);
         cweb_box_add_text(&item, &t);
         cweb_container_add(&scroll_area, &item);
     }
@@ -294,7 +294,7 @@ int main(int argc, char **argv) {
     {
         cweb_widget t;
         cweb_text_create(&t, "Built with cweb — Ctrl+C to stop the server");
-        cweb_text_set_color(&t, 120, 120, 140);
+        cweb_text_set_color(&t, (cweb_rgb){120, 120, 140});
         cweb_text_set_font_size(&t, 12);
         cweb_text_set_style(&t, CWEB_TEXT_ITALIC);
         cweb_box_add_text(&footer, &t);

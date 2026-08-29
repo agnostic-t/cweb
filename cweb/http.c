@@ -16,7 +16,10 @@
 #include <arpa/inet.h>
 #include <signal.h>
 #include <limits.h>    /* PATH_MAX */
-#include <malloc.h>  /* malloc_trim */
+
+#if defined(__GLIBC__)
+#include <malloc.h>    /* malloc_trim (только для glibc) */
+#endif
 
 /* ------------------------------------------------------------------ *
  *  Minimal HTTP/1.1 server on raw sockets.                            *
@@ -818,9 +821,11 @@ int cweb_http_serve(cweb_app *app) {
            malloc arena keeps freed blocks cached, which can look like a
            leak. malloc_trim(0) asks the allocator to release any free
            pages at the top of the heap back to the OS.                  */
+#if defined(__GLIBC__)
         if (++request_counter % 20 == 0) {
             malloc_trim(0);
         }
+#endif
     }
 
     close(srv);
